@@ -265,7 +265,7 @@ let isLoadingFiltered = false;
             return;
         }
 
-        setupEventListeners();
+        setupEventListeners(); // This now includes all event listeners
         setupFilteredInfiniteScroll();
         
         // Auto-test endpoints on load
@@ -304,6 +304,10 @@ let isLoadingFiltered = false;
                 if (clearSearchBtn) {
                     clearSearchBtn.style.display = hasValue ? 'flex' : 'none';
                 }
+                // MOVED HERE: Update search indicator on input
+                setTimeout(() => {
+                    updateSearchIndicator();
+                }, 100);
             });
         }
         
@@ -331,6 +335,10 @@ let isLoadingFiltered = false;
                 e.target.matches('.category-option input')) {
                 updateFilterState();
                 updateFilterUI();
+                // MOVED HERE: Update search indicator on filter change
+                setTimeout(() => {
+                    updateSearchIndicator();
+                }, 100);
             }
         });
 
@@ -340,7 +348,18 @@ let isLoadingFiltered = false;
                 closeFilterSidebar();
             }
         });
+
+        // MOVED HERE: Initialize search indicator after DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                updateSearchIndicator();
+            });
+        } else {
+            // DOM is already loaded, update immediately
+            updateSearchIndicator();
+        }
     }
+
 
     // Check if any filters are currently active
     function hasActiveFilters() {
@@ -1015,13 +1034,10 @@ let isLoadingFiltered = false;
 
     window.openFilterSidebar = openFilterSidebar;
     window.closeFilterSidebar = closeFilterSidebar;
-    
-    // MOVED INSIDE IIFE - Make the problematic functions globally available
     window.updateSearchIndicator = updateSearchIndicator;
     window.setupFilteredInfiniteScroll = setupFilteredInfiniteScroll;
 
-    // Console debugging info
-    console.log(`
+     console.log(`
 🔍 FILTER SYSTEM LOADED
 Debug commands:
 - window.debugTestEndpoints() - Test all endpoints
@@ -1029,33 +1045,4 @@ Debug commands:
 - window.retryLoadFilterOptions() - Retry loading filters
     `);
 
-    // FIXED: Move these event listeners INSIDE the IIFE to prevent reference errors
-    document.addEventListener('DOMContentLoaded', function() {
-        if (updateSearchIndicator) {
-            updateSearchIndicator();
-        }
-    });
-
-    document.addEventListener('input', function(e) {
-        if (e.target && e.target.id === 'product-search-input') {
-            setTimeout(() => {
-                if (updateSearchIndicator) {
-                    updateSearchIndicator();
-                }
-            }, 100);
-        }
-    });
-
-    // Call it whenever checkboxes change
-    document.addEventListener('change', function(e) {
-        if (e.target && (e.target.name === 'price' || e.target.name === 'stock' || 
-            e.target.closest('.brand-option') || e.target.closest('.category-option'))) {
-            setTimeout(() => {
-                if (updateSearchIndicator) {
-                    updateSearchIndicator();
-                }
-            }, 100);
-        }
-    });
-
-})();
+})(); 
