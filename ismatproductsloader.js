@@ -6,12 +6,6 @@
 window.cartItems = window.cartItems || [];
 window.quotationItems = window.quotationItems || [];
 
-let isFilterMode = false;
-let isSearchMode = false;
-let mainScrollListener = null;
-let filterScrollListener = null;
-let scrollSystemActive = 'main'; // 'main' or 'filter'
-
 // Current page state for infinite scroll
 let currentPage = 1;
 let totalPages = 1;
@@ -405,13 +399,13 @@ function applyFilters() {
             return Array.from(priceFilters).some(filter => {
                 const filterText = filter.parentElement.textContent.trim();
                 
-                if (filterText.includes('Under ₹1,000')) {
+                if (filterText.includes('Under â‚¹1,000')) {
                     return price < 1000;
-                } else if (filterText.includes('₹1,000 - ₹3,000')) {
+                } else if (filterText.includes('â‚¹1,000 - â‚¹3,000')) {
                     return price >= 1000 && price <= 3000;
-                } else if (filterText.includes('₹3,000 - ₹5,000')) {
+                } else if (filterText.includes('â‚¹3,000 - â‚¹5,000')) {
                     return price >= 3000 && price <= 5000;
-                } else if (filterText.includes('Above ₹5,000')) {
+                } else if (filterText.includes('Above â‚¹5,000')) {
                     return price > 5000;
                 }
                 return true;
@@ -1257,55 +1251,37 @@ function loadMoreProducts() {
 
 // Infinite scroll detection
 function setupInfiniteScroll() {
-    // Just call the global function
-    window.enableMainInfiniteScroll();
-}
-
-// Function to remove main scroll listener
-function removeMainScrollListener() {
-    if (mainScrollListener) {
-        window.removeEventListener('scroll', mainScrollListener);
-        window.removeEventListener('resize', mainScrollListener);
-        mainScrollListener = null;
-        console.log('Main infinite scroll deactivated');
+    let ticking = false;
+    
+    function checkScrollPosition() {
+        if (window.isSearchMode && window.isSearchMode()) {
+            ticking = false;
+            return;
+        }
+        
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+        
+        const threshold = 200;
+        const isNearBottom = scrollTop + windowHeight >= documentHeight - threshold;
+        
+        if (isNearBottom && hasMoreProducts && !isLoading) {
+            loadProducts(currentPage + 1, true);
+        }
+        
+        ticking = false;
     }
-}
-
-function activateMainScrollSystem() {
-    if (scrollSystemActive === 'main') return;
     
-    console.log('Switching to main scroll system');
+    function onScroll() {
+        if (!ticking) {
+            requestAnimationFrame(checkScrollPosition);
+            ticking = true;
+        }
+    }
     
-    // Deactivate filter system
-    window.deactivateFilterScrollSystem && window.deactivateFilterScrollSystem();
-    
-    scrollSystemActive = 'main';
-    setupInfiniteScroll();
-}
-
-// Function to deactivate main scroll system
-function deactivateMainScrollSystem() {
-    if (scrollSystemActive !== 'main') return;
-    
-    console.log('Deactivating main scroll system');
-    removeMainScrollListener();
-    scrollSystemActive = 'none';
-}
-
-function hasActiveFilters() {
-    // Check if any filters are active in the filter system
-    const priceFilters = document.querySelectorAll('input[name="price"]:checked');
-    const stockFilters = document.querySelectorAll('input[name="stock"]:checked');
-    const brandFilters = document.querySelectorAll('.brand-option input:checked');
-    const categoryFilters = document.querySelectorAll('.category-option input:checked');
-    const searchInput = document.getElementById('product-search-input');
-    const hasSearchQuery = searchInput && searchInput.value.trim().length > 0;
-    
-    return hasSearchQuery || 
-           priceFilters.length > 0 || 
-           stockFilters.length > 0 || 
-           brandFilters.length > 0 || 
-           categoryFilters.length > 0;
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
 }
 
 // ===============================
@@ -1423,14 +1399,11 @@ function refreshDisplay() {
 
 window.onSearchComplete = function(results, query) {
     console.log(`Search completed for "${query}": ${results.length} results found`);
-    
-    // Switch to filter mode
-    window.enableFilterInfiniteScroll();
-    
     originalProducts = results;
     allProducts = results;
     filteredProducts = results;
     
+    // Store search state
     window.currentSearchQuery = query;
     window.searchResults = results;
     
@@ -1439,24 +1412,10 @@ window.onSearchComplete = function(results, query) {
 
 window.onSearchClear = function() {
     console.log('Search cleared, loading all products');
-    
     window.currentSearchQuery = '';
     window.searchResults = null;
-    
-    // Switch back to main mode
-    window.enableMainInfiniteScroll();
-    
-    // Reset main system state
-    currentPage = 1;
-    hasMoreProducts = true;
-    
     loadProducts(1, false, false);
 };
-
-
-// Export functions for filter system to use
-window.activateMainScrollSystem = activateMainScrollSystem;
-window.deactivateMainScrollSystem = deactivateMainScrollSystem;
 
 // ===============================
 // CSS STYLES
@@ -1748,5 +1707,4 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
         console.error('Error during initialization:', error);
     }
-
 });
