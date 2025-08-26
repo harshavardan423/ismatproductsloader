@@ -2,6 +2,8 @@
 // GLOBAL STATE MANAGEMENT
 // ===============================
 
+window.isFilterSystemActive = false;
+
 // Initialize global cart and quotation if they don't exist
 window.cartItems = window.cartItems || [];
 window.quotationItems = window.quotationItems || [];
@@ -1254,6 +1256,12 @@ function setupInfiniteScroll() {
     let ticking = false;
     
     function checkScrollPosition() {
+        // IMMEDIATE CHECK - if filter system is active, don't proceed
+        if (window.isFilterSystemActive) {
+            ticking = false;
+            return;
+        }
+        
         // Check if any filters or search are active - if so, don't load more products
         const searchInput = document.getElementById('product-search-input');
         const hasSearchText = searchInput && searchInput.value.trim();
@@ -1410,6 +1418,10 @@ function refreshDisplay() {
 
 window.onSearchComplete = function(results, query) {
     console.log(`Search completed for "${query}": ${results.length} results found`);
+    
+    // IMMEDIATELY activate filter system
+    window.isFilterSystemActive = true;
+    
     originalProducts = results;
     allProducts = results;
     filteredProducts = results;
@@ -1423,6 +1435,10 @@ window.onSearchComplete = function(results, query) {
 
 window.onSearchClear = function() {
     console.log('Search cleared, loading all products');
+    
+    // IMMEDIATELY deactivate filter system
+    window.isFilterSystemActive = false;
+    
     window.currentSearchQuery = '';
     window.searchResults = null;
     loadProducts(1, false, false);
@@ -1719,4 +1735,5 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Error during initialization:', error);
     }
 });
+
 
