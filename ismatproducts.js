@@ -330,15 +330,7 @@
             window.updateQuotationButton();
         }
         
-        // Generate WhatsApp message
-        const variantText = selectedVariant ? ` (${selectedVariant.name})` : '';
-        const message = `Hi, I'm interested in ${product.product_name}${variantText}`;
-        const whatsappNumber = product.whatsapp_number || '917738096075';
-        const whatsappUrl = `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
-        
-        // Open WhatsApp in new tab
-        window.open(whatsappUrl, '_blank');
-        
+        // Just add to quotation cart - no automatic WhatsApp opening
         return 1;
     }
 
