@@ -8,6 +8,9 @@ window.quotationItems = window.quotationItems || [];
 
 let isFilterMode = false;
 let isSearchMode = false;
+let mainScrollListener = null;
+let filterScrollListener = null;
+let scrollSystemActive = 'main'; // 'main' or 'filter'
 
 // Current page state for infinite scroll
 let currentPage = 1;
@@ -1254,13 +1257,16 @@ function loadMoreProducts() {
 
 // Infinite scroll detection
 function setupInfiniteScroll() {
+    // Remove any existing listener first
+    removeMainScrollListener();
+    
     let ticking = false;
     
     function checkScrollPosition() {
-        // FIXED: Properly check if we're in filter/search mode
-        if (isFilterMode || isSearchMode || window.searchResults || hasActiveFilters()) {
+        // Only proceed if main system is active
+        if (scrollSystemActive !== 'main') {
             ticking = false;
-            return; // Don't load regular products when filters are active
+            return;
         }
         
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
@@ -1284,10 +1290,44 @@ function setupInfiniteScroll() {
         }
     }
     
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll, { passive: true });
+    // Store reference to listener for removal
+    mainScrollListener = onScroll;
+    window.addEventListener('scroll', mainScrollListener, { passive: true });
+    window.addEventListener('resize', mainScrollListener, { passive: true });
+    
+    console.log('Main infinite scroll activated');
 }
 
+// Function to remove main scroll listener
+function removeMainScrollListener() {
+    if (mainScrollListener) {
+        window.removeEventListener('scroll', mainScrollListener);
+        window.removeEventListener('resize', mainScrollListener);
+        mainScrollListener = null;
+        console.log('Main infinite scroll deactivated');
+    }
+}
+
+function activateMainScrollSystem() {
+    if (scrollSystemActive === 'main') return;
+    
+    console.log('Switching to main scroll system');
+    
+    // Deactivate filter system
+    window.deactivateFilterScrollSystem && window.deactivateFilterScrollSystem();
+    
+    scrollSystemActive = 'main';
+    setupInfiniteScroll();
+}
+
+// Function to deactivate main scroll system
+function deactivateMainScrollSystem() {
+    if (scrollSystemActive !== 'main') return;
+    
+    console.log('Deactivating main scroll system');
+    removeMainScrollListener();
+    scrollSystemActive = 'none';
+}
 
 function hasActiveFilters() {
     // Check if any filters are active in the filter system
@@ -1421,15 +1461,16 @@ function refreshDisplay() {
 window.onSearchComplete = function(results, query) {
     console.log(`Search completed for "${query}": ${results.length} results found`);
     
-    // Set search mode flags
-    isSearchMode = true;
-    isFilterMode = true;
+    // Completely switch to filter system
+    deactivateMainScrollSystem();
+    if (window.activateFilterScrollSystem) {
+        window.activateFilterScrollSystem();
+    }
     
     originalProducts = results;
     allProducts = results;
     filteredProducts = results;
     
-    // Store search state
     window.currentSearchQuery = query;
     window.searchResults = results;
     
@@ -1453,18 +1494,28 @@ window.onSearchClear = function() {
     loadProducts(1, false, false);
 };
 
-// Add these functions to manage filter mode state
-window.setFilterMode = function(active) {
-    isFilterMode = active;
-    console.log('Filter mode set to:', active);
+window.onSearchClear = function() {
+    console.log('Search cleared, loading all products');
+    
+    window.currentSearchQuery = '';
+    window.searchResults = null;
+    
+    // Switch back to main system
+    if (window.deactivateFilterScrollSystem) {
+        window.deactivateFilterScrollSystem();
+    }
+    
+    // Reset main system state
+    currentPage = 1;
+    hasMoreProducts = true;
+    
+    activateMainScrollSystem();
+    loadProducts(1, false, false);
 };
 
-window.isFilterModeActive = function() {
-    return isFilterMode || isSearchMode || !!window.searchResults;
-};
-
-// Export the new functions
-window.hasActiveFilters = hasActiveFilters;
+// Export functions for filter system to use
+window.activateMainScrollSystem = activateMainScrollSystem;
+window.deactivateMainScrollSystem = deactivateMainScrollSystem;
 
 // ===============================
 // CSS STYLES
@@ -1756,4 +1807,5 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
         console.error('Error during initialization:', error);
     }
+
 });
