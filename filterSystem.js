@@ -1,5 +1,4 @@
 
-<script>
 
 let hasMoreFilteredPages = true;
 let isLoadingFiltered = false;
@@ -1024,4 +1023,3 @@ document.addEventListener('change', function(e) {
     }
 });
 
-</script>
