@@ -1760,3 +1760,179 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Error during initialization:', error);
     }
 });
+
+// ===============================
+// ENHANCED EVENT HANDLING SYSTEM
+// ===============================
+
+// Make the event handler globally accessible and persistent
+window.handleProductCardClick = function(e) {
+    // Prevent processing if already processing a click
+    if (isProcessingClick) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+    }
+    
+    const target = e.target;
+    const card = target.closest('.product-card');
+    if (!card) return;
+    
+    const productId = parseInt(card.getAttribute('data-product-id'));
+    if (!productId) return;
+    
+    // FIXED: Always get fresh product array from window global
+    const currentProducts = window.allProducts || [];
+    const product = currentProducts.find(p => p.id === productId);
+    
+    if (!product) {
+        console.warn(`Product with ID ${productId} not found in current product array`, currentProducts);
+        return;
+    }
+    
+    // Handle view details button
+    if (target.classList.contains('view-details-button') || 
+        target.closest('.view-details-button')) {
+        e.preventDefault();
+        e.stopPropagation();
+        openProductModal(product);
+        return;
+    }
+    
+    // Handle card content click
+    if (target.closest('.product-card-content')) {
+        e.preventDefault();
+        e.stopPropagation();
+        openProductModal(product);
+        return;
+    }
+    
+    // Handle add to cart
+    if (target.classList.contains('add-to-cart') || 
+        target.closest('.add-to-cart')) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (isProcessingClick) return;
+        
+        const quantity = addToCart(product);
+        return;
+    }
+    
+    // Handle request quote
+    if (target.classList.contains('request-quote') || 
+        target.closest('.request-quote')) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (isProcessingClick) return;
+        
+        const quantity = addToQuotation(product);
+        return;
+    }
+};
+
+// FIXED: Enhanced event listener management
+let isEventListenerAttached = false;
+
+function ensureEventListenersAttached() {
+    // Only attach once to prevent multiple listeners
+    if (!isEventListenerAttached) {
+        // Use the globally accessible handler
+        document.addEventListener('click', window.handleProductCardClick, true); // Use capture phase
+        isEventListenerAttached = true;
+        console.log('Event listeners attached for product cards (one-time setup)');
+    } else {
+        console.log('Event listeners already attached, skipping...');
+    }
+}
+
+// FIXED: Reset event listener system when needed
+window.resetEventListeners = function() {
+    if (isEventListenerAttached) {
+        document.removeEventListener('click', window.handleProductCardClick, true);
+        isEventListenerAttached = false;
+    }
+    ensureEventListenersAttached();
+    console.log('Event listeners reset and reattached');
+};
+
+// FIXED: Enhanced display function
+function displayProductsInGrid(products) {
+    const productsGrid = document.getElementById('products-grid');
+    const loadingIndicator = document.getElementById('infinite-scroll-loading');
+    const endIndicator = document.getElementById('end-of-products');
+    
+    if (loadingIndicator) loadingIndicator.style.display = 'none';
+    if (endIndicator) endIndicator.style.display = 'none';
+    
+    if (products.length === 0) {
+        const isSearchMode = window.isSearchMode && window.isSearchMode();
+        const message = isSearchMode ? 
+            'No products found matching your search criteria.' : 
+            'No products found matching your filters.';
+        
+        if (productsGrid) {
+            productsGrid.innerHTML = `
+                <div class="no-results-message">
+                    <i class="fas fa-search"></i>
+                    <h3>No Results Found</h3>
+                    <p>${message}</p>
+                    ${isSearchMode ? 
+                        '<button onclick="window.clearSearch && window.clearSearch()" style="padding: 10px 20px; background: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer;">Clear Search</button>' : 
+                        '<button onclick="clearAllFilters()" style="padding: 10px 20px; background: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer;">Clear Filters</button>'
+                    }
+                </div>
+            `;
+        }
+        return;
+    }
+    
+    const productCards = products.map(product => createProductCard(product)).join('');
+    if (productsGrid) {
+        productsGrid.innerHTML = productCards;
+    }
+    
+    // FIXED: Ensure event listeners are attached (but only once)
+    ensureEventListenersAttached();
+    
+    if (window.isSearchMode && window.isSearchMode() && endIndicator) {
+        endIndicator.style.display = 'block';
+        endIndicator.innerHTML = '<p>End of search results</p>';
+    }
+}
+
+// FIXED: Enhanced function for appending products (used by filter system)
+window.appendProductsToGrid = function(newProducts) {
+    const productsGrid = document.getElementById('products-grid');
+    if (!productsGrid || !newProducts || newProducts.length === 0) return;
+    
+    const newProductCards = newProducts.map(product => createProductCard(product)).join('');
+    productsGrid.innerHTML += newProductCards;
+    
+    // Event listeners are already attached globally, no need to re-attach
+    console.log(`Appended ${newProducts.length} products to grid`);
+};
+
+// Update the existing ensureEventListenersAttached export
+window.ensureEventListenersAttached = ensureEventListenersAttached;
+
+// ===============================
+// INITIALIZATION UPDATES
+// ===============================
+
+// Update the DOMContentLoaded section
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        // ... existing initialization code ...
+        
+        // FIXED: Set up event listeners once during initialization
+        ensureEventListenersAttached();
+        
+        // Rest of existing initialization...
+        console.log('Combined Products & Quotation component initialized successfully');
+        
+    } catch (error) {
+        console.error('Error during initialization:', error);
+    }
+});
