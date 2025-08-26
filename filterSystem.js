@@ -1013,7 +1013,6 @@ let isLoadingFiltered = false;
         initializeFilterSystem();
     }
 
-    // Make functions globally available
     window.openFilterSidebar = openFilterSidebar;
     window.closeFilterSidebar = closeFilterSidebar;
     
@@ -1030,33 +1029,33 @@ Debug commands:
 - window.retryLoadFilterOptions() - Retry loading filters
     `);
 
+    // FIXED: Move these event listeners INSIDE the IIFE to prevent reference errors
+    document.addEventListener('DOMContentLoaded', function() {
+        if (updateSearchIndicator) {
+            updateSearchIndicator();
+        }
+    });
+
+    document.addEventListener('input', function(e) {
+        if (e.target && e.target.id === 'product-search-input') {
+            setTimeout(() => {
+                if (updateSearchIndicator) {
+                    updateSearchIndicator();
+                }
+            }, 100);
+        }
+    });
+
+    // Call it whenever checkboxes change
+    document.addEventListener('change', function(e) {
+        if (e.target && (e.target.name === 'price' || e.target.name === 'stock' || 
+            e.target.closest('.brand-option') || e.target.closest('.category-option'))) {
+            setTimeout(() => {
+                if (updateSearchIndicator) {
+                    updateSearchIndicator();
+                }
+            }, 100);
+        }
+    });
+
 })();
-
-// FIXED: Move these event listeners OUTSIDE the IIFE but after the functions are made global
-document.addEventListener('DOMContentLoaded', function() {
-    if (window.updateSearchIndicator) {
-        window.updateSearchIndicator();
-    }
-});
-
-document.addEventListener('input', function(e) {
-    if (e.target && e.target.id === 'product-search-input') {
-        setTimeout(() => {
-            if (window.updateSearchIndicator) {
-                window.updateSearchIndicator();
-            }
-        }, 100);
-    }
-});
-
-// Call it whenever checkboxes change
-document.addEventListener('change', function(e) {
-    if (e.target && (e.target.name === 'price' || e.target.name === 'stock' || 
-        e.target.closest('.brand-option') || e.target.closest('.category-option'))) {
-        setTimeout(() => {
-            if (window.updateSearchIndicator) {
-                window.updateSearchIndicator();
-            }
-        }, 100);
-    }
-});
