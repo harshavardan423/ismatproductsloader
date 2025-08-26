@@ -1254,11 +1254,22 @@ function setupInfiniteScroll() {
     let ticking = false;
     
     function checkScrollPosition() {
-        if (window.isSearchMode && window.isSearchMode()) {
+        // Check if any filters or search are active - if so, don't load more products
+        const searchInput = document.getElementById('product-search-input');
+        const hasSearchText = searchInput && searchInput.value.trim();
+        const hasSearchResults = window.searchResults && window.searchResults.length >= 0;
+        const hasPriceFilter = document.querySelector('input[name="price"]:checked');
+        const hasStockFilter = document.querySelectorAll('input[name="stock"]:checked').length > 0;
+        const hasBrandFilter = document.querySelectorAll('.brand-option input:checked').length > 0;
+        const hasCategoryFilter = document.querySelectorAll('.category-option input:checked').length > 0;
+        
+        // If ANY filter is active, don't load more products
+        if (hasSearchText || hasSearchResults || hasPriceFilter || hasStockFilter || hasBrandFilter || hasCategoryFilter) {
             ticking = false;
             return;
         }
         
+        // Original infinite scroll logic
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
         const windowHeight = window.innerHeight;
         const documentHeight = document.documentElement.scrollHeight;
@@ -1708,3 +1719,4 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Error during initialization:', error);
     }
 });
+
