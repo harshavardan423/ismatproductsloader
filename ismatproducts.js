@@ -525,7 +525,45 @@
             
             if (isProcessingClick) return;
             
-            const quantity = addToQuotation(product);
+            // Block any automatic actions and just add to quote cart
+            isProcessingClick = true;
+            setTimeout(() => {
+                isProcessingClick = false;
+            }, 500);
+            
+            // Add to quotation cart directly - NO WhatsApp opening
+            const existingItem = window.quotationItems.find(item => 
+                item.id === product.id && 
+                (item.selectedVariant?.name || null) === (selectedVariant?.name || null)
+            );
+            
+            if (existingItem) {
+                existingItem.quantity += 1;
+            } else {
+                const price = product.offer_price || product.mrp || 0;
+                const finalPrice = selectedVariant ? (selectedVariant.price || price) : price;
+                
+                const newItem = {
+                    id: product.id,
+                    name: product.product_name,
+                    price: parseFloat(finalPrice),
+                    image: getImageUrl(product.product_image_urls && product.product_image_urls[0]),
+                    category: product.category,
+                    quantity: 1,
+                    selectedVariant: selectedVariant ? {
+                        name: selectedVariant.name,
+                        price: selectedVariant.price,
+                        sku: selectedVariant.sku || product.sku
+                    } : null
+                };
+                
+                window.quotationItems.push(newItem);
+            }
+            
+            if (window.updateQuotationButton) {
+                window.updateQuotationButton();
+            }
+            
             return;
         }
     }
@@ -1825,7 +1863,47 @@
         if (!currentModalProduct || isProcessingClick) return;
         
         try {
-            const quantity = addToQuotation(currentModalProduct);
+            // Block any WhatsApp opening completely
+            if (isProcessingClick) return;
+            
+            isProcessingClick = true;
+            setTimeout(() => {
+                isProcessingClick = false;
+            }, 500);
+            
+            // Just add to quotation - NO WhatsApp
+            const existingItem = window.quotationItems.find(item => 
+                item.id === currentModalProduct.id && 
+                (item.selectedVariant?.name || null) === (selectedVariant?.name || null)
+            );
+            
+            if (existingItem) {
+                existingItem.quantity += 1;
+            } else {
+                const price = currentModalProduct.offer_price || currentModalProduct.mrp || 0;
+                const finalPrice = selectedVariant ? (selectedVariant.price || price) : price;
+                
+                const newItem = {
+                    id: currentModalProduct.id,
+                    name: currentModalProduct.product_name,
+                    price: parseFloat(finalPrice),
+                    image: getImageUrl(currentModalProduct.product_image_urls && currentModalProduct.product_image_urls[0]),
+                    category: currentModalProduct.category,
+                    quantity: 1,
+                    selectedVariant: selectedVariant ? {
+                        name: selectedVariant.name,
+                        price: selectedVariant.price,
+                        sku: selectedVariant.sku || currentModalProduct.sku
+                    } : null
+                };
+                
+                window.quotationItems.push(newItem);
+            }
+            
+            if (window.updateQuotationButton) {
+                window.updateQuotationButton();
+            }
+            
             updateModalQuoteButton();
             
         } catch (error) {
