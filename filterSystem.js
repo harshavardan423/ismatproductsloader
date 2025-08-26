@@ -293,7 +293,6 @@ document.addEventListener('DOMContentLoaded', function() {
                currentFilters.categories.length > 0;
     }
 
-    // Load more filtered products for infinite scroll
     async function loadMoreFilteredProducts() {
     if (isLoadingFiltered || !hasMoreFilteredPages) return;
     
@@ -314,6 +313,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const newProducts = data.products || [];
         
         if (newProducts.length > 0) {
+            // Merge with existing products
+            const currentProducts = window.allProducts || [];
+            const updatedProducts = [...currentProducts, ...newProducts];
+            
+            // Update global product state with merged products
+            updateGlobalProductState(updatedProducts);
+            
             // Get current products from the grid
             const productsGrid = document.getElementById('products-grid');
             if (productsGrid) {
@@ -582,7 +588,6 @@ document.addEventListener('DOMContentLoaded', function() {
         updateSearchIndicator();
     }
 
-    // Perform search with fallback to regular search endpoint
     async function performSearch() {
     // IMMEDIATELY activate filter system to prevent main scroll interference
     window.isFilterSystemActive = true;
@@ -624,12 +629,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const data = await response.json();
         const results = data.products || [];
 
+        // IMPORTANT: Update global product state BEFORE displaying
+        updateGlobalProductState(results);
+
         if (window.displayProductsInGrid) {
             window.displayProductsInGrid(results);
         }
         
-        hasMoreFilteredPages = data.has_next || false;hasMoreFilteredPages = data.has_next || false;
-        window.hasMoreFilteredPages = hasMoreFilteredPages; // Make it globally accessible
+        hasMoreFilteredPages = data.has_next || false;
+        window.hasMoreFilteredPages = hasMoreFilteredPages;
 
         window.searchResults = results;
         window.currentSearchQuery = query;
@@ -716,7 +724,30 @@ document.addEventListener('DOMContentLoaded', function() {
                currentFilters.categories.length > 0;
     }
 
-    // Apply filters from sidebar with fallbacks
+
+    // Function to update global product state
+function updateGlobalProductState(products) {
+    // Update the main products array that event handlers depend on
+    if (window.allProducts) {
+        window.allProducts = products;
+    }
+    
+    // Also update originalProducts and filteredProducts for consistency
+    if (window.originalProducts) {
+        window.originalProducts = products;
+    }
+    
+    if (window.filteredProducts) {
+        window.filteredProducts = products;
+    }
+    
+    // Make sure these are accessible globally
+    window.allProducts = products;
+    window.originalProducts = products;
+    window.filteredProducts = products;
+}
+
+
     async function applyFiltersFromSidebar() {
     updateFilterState();
     
@@ -774,6 +805,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         const filteredProducts = data.products || [];
+        
+        // IMPORTANT: Update global product state BEFORE displaying
+        updateGlobalProductState(filteredProducts);
         
         if (window.displayProductsInGrid) {
             window.displayProductsInGrid(filteredProducts);
