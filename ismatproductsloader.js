@@ -1257,45 +1257,8 @@ function loadMoreProducts() {
 
 // Infinite scroll detection
 function setupInfiniteScroll() {
-    // Remove any existing listener first
-    removeMainScrollListener();
-    
-    let ticking = false;
-    
-    function checkScrollPosition() {
-        // Only proceed if main system is active
-        if (scrollSystemActive !== 'main') {
-            ticking = false;
-            return;
-        }
-        
-        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        const windowHeight = window.innerHeight;
-        const documentHeight = document.documentElement.scrollHeight;
-        
-        const threshold = 200;
-        const isNearBottom = scrollTop + windowHeight >= documentHeight - threshold;
-        
-        if (isNearBottom && hasMoreProducts && !isLoading) {
-            loadProducts(currentPage + 1, true);
-        }
-        
-        ticking = false;
-    }
-    
-    function onScroll() {
-        if (!ticking) {
-            requestAnimationFrame(checkScrollPosition);
-            ticking = true;
-        }
-    }
-    
-    // Store reference to listener for removal
-    mainScrollListener = onScroll;
-    window.addEventListener('scroll', mainScrollListener, { passive: true });
-    window.addEventListener('resize', mainScrollListener, { passive: true });
-    
-    console.log('Main infinite scroll activated');
+    // Just call the global function
+    window.enableMainInfiniteScroll();
 }
 
 // Function to remove main scroll listener
@@ -1461,11 +1424,8 @@ function refreshDisplay() {
 window.onSearchComplete = function(results, query) {
     console.log(`Search completed for "${query}": ${results.length} results found`);
     
-    // Completely switch to filter system
-    deactivateMainScrollSystem();
-    if (window.activateFilterScrollSystem) {
-        window.activateFilterScrollSystem();
-    }
+    // Switch to filter mode
+    window.enableFilterInfiniteScroll();
     
     originalProducts = results;
     allProducts = results;
@@ -1480,38 +1440,19 @@ window.onSearchComplete = function(results, query) {
 window.onSearchClear = function() {
     console.log('Search cleared, loading all products');
     
-    // Clear search mode flags
-    isSearchMode = false;
-    isFilterMode = false;
-    
     window.currentSearchQuery = '';
     window.searchResults = null;
     
-    // Reset pagination for regular products
+    // Switch back to main mode
+    window.enableMainInfiniteScroll();
+    
+    // Reset main system state
     currentPage = 1;
     hasMoreProducts = true;
     
     loadProducts(1, false, false);
 };
 
-window.onSearchClear = function() {
-    console.log('Search cleared, loading all products');
-    
-    window.currentSearchQuery = '';
-    window.searchResults = null;
-    
-    // Switch back to main system
-    if (window.deactivateFilterScrollSystem) {
-        window.deactivateFilterScrollSystem();
-    }
-    
-    // Reset main system state
-    currentPage = 1;
-    hasMoreProducts = true;
-    
-    activateMainScrollSystem();
-    loadProducts(1, false, false);
-};
 
 // Export functions for filter system to use
 window.activateMainScrollSystem = activateMainScrollSystem;
