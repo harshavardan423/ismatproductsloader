@@ -296,56 +296,62 @@ let isLoadingFiltered = false;
     }
 
     async function loadMoreFilteredProducts() {
-        if (isLoadingFiltered || !hasMoreFilteredPages) return;
+    if (isLoadingFiltered || !hasMoreFilteredPages) return;
+    
+    isLoadingFiltered = true;
+    const nextPage = currentFilteredPage + 1;
+    
+    try {
+        const params = buildFilterParams(nextPage, 12);
+        const response = await fetch(`${BASE_URL}/products/filtered?${params.toString()}`);
         
-        isLoadingFiltered = true;
-        const nextPage = currentFilteredPage + 1;
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         
-        try {
-            const params = buildFilterParams(nextPage, 12);
-            const response = await fetch(`${BASE_URL}/products/filtered?${params.toString()}`);
+        const data = await response.json();
+        const newProducts = data.products || [];
+        
+        if (newProducts.length > 0) {
+            const currentProducts = window.allProducts || [];
+            const updatedProducts = [...currentProducts, ...newProducts];
+            updateGlobalProductArrays(updatedProducts);
             
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            const newProducts = data.products || [];
-            
-            if (newProducts.length > 0) {
-                const currentProducts = window.allProducts || [];
-                const updatedProducts = [...currentProducts, ...newProducts];
-                updateGlobalProductArrays(updatedProducts);
-                
+            // FIXED: Use the new appendProductsToGrid function
+            if (window.appendProductsToGrid) {
+                window.appendProductsToGrid(newProducts);
+            } else {
+                // Fallback if the new function isn't available
                 const productsGrid = document.getElementById('products-grid');
-                if (productsGrid) {
+                if (productsGrid && window.createProductCard) {
                     const newProductCards = newProducts.map(product => {
-                        return window.createProductCard ? window.createProductCard(product) : '';
+                        return window.createProductCard(product);
                     }).join('');
                     
                     productsGrid.innerHTML += newProductCards;
                     
-                    // CRITICAL: Ensure event listeners are attached to new cards
-                    if (window.ensureEventListenersAttached) {
-                        window.ensureEventListenersAttached();
+                    // Try to ensure event listeners, but don't rely on it
+                    if (window.resetEventListeners) {
+                        window.resetEventListeners();
                     }
                 }
-                
-                currentFilteredPage = nextPage;
-                hasMoreFilteredPages = data.has_next || false;
-                
-                console.log(`Added ${newProducts.length} more filtered products`);
-            } else {
-                hasMoreFilteredPages = false;
             }
             
-        } catch (error) {
-            console.error('Error loading more filtered products:', error);
+            currentFilteredPage = nextPage;
+            hasMoreFilteredPages = data.has_next || false;
+            
+            console.log(`Added ${newProducts.length} more filtered products`);
+        } else {
             hasMoreFilteredPages = false;
-        } finally {
-            isLoadingFiltered = false;
         }
+        
+    } catch (error) {
+        console.error('Error loading more filtered products:', error);
+        hasMoreFilteredPages = false;
+    } finally {
+        isLoadingFiltered = false;
     }
+}
 
     function buildFilterParams(page = 1, perPage = 12) {
         const params = new URLSearchParams();
@@ -559,71 +565,73 @@ let isLoadingFiltered = false;
         updateSearchIndicator();
     }
 
-    async function performSearch() {
-        window.isFilterSystemActive = true;
-        
-        const searchInput = document.getElementById('product-search-input');
-        const query = searchInput?.value?.trim() || '';
-        currentSearchQuery = query;
-        
-        updateFilterState();
-        
-        if (!query) {
-            applyFiltersFromSidebar();
-            return;
-        }
+    // FIXED: Update the performSearch function
+async function performSearch() {
+    window.isFilterSystemActive = true;
+    
+    const searchInput = document.getElementById('product-search-input');
+    const query = searchInput?.value?.trim() || '';
+    currentSearchQuery = query;
+    
+    updateFilterState();
+    
+    if (!query) {
+        applyFiltersFromSidebar();
+        return;
+    }
 
-        currentFilteredPage = 1;
-        hasMoreFilteredPages = true;
+    currentFilteredPage = 1;
+    hasMoreFilteredPages = true;
+    
+    try {
+        updateResultsDisplay(0, query, false, true);
+        
+        let response, endpoint;
+        const params = buildFilterParams(1, 12);
         
         try {
-            updateResultsDisplay(0, query, false, true);
-            
-            let response, endpoint;
-            const params = buildFilterParams(1, 12);
-            
-            try {
-                endpoint = `${BASE_URL}/products/filtered?${params.toString()}`;
-                response = await fetch(endpoint);
-            } catch (filteredError) {
-                endpoint = `${BASE_URL}/search?q=${encodeURIComponent(query)}&per_page=12`;
-                response = await fetch(endpoint);
-            }
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            const results = data.products || [];
-
-            updateGlobalProductArrays(results);
-
-            if (window.displayProductsInGrid) {
-                window.displayProductsInGrid(results);
-            }
-            
-            hasMoreFilteredPages = data.has_next || false;
-            window.hasMoreFilteredPages = hasMoreFilteredPages;
-
-            window.searchResults = results;
-            window.currentSearchQuery = query;
-
-            if (window.onSearchComplete) {
-                window.onSearchComplete(results, query);
-            }
-
-            const hasActiveFilters = hasActiveNonSearchFilters();
-            updateResultsDisplay(results.length, query, hasActiveFilters);
-            closeFilterSidebar();
-
-        } catch (error) {
-            console.error('Search error:', error);
-            updateResultsDisplay(0, query, false, false, 'Search failed. Please try again.');
+            endpoint = `${BASE_URL}/products/filtered?${params.toString()}`;
+            response = await fetch(endpoint);
+        } catch (filteredError) {
+            endpoint = `${BASE_URL}/search?q=${encodeURIComponent(query)}&per_page=12`;
+            response = await fetch(endpoint);
+        }
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        updateSearchIndicator();
+        const data = await response.json();
+        const results = data.products || [];
+
+        updateGlobalProductArrays(results);
+
+        // FIXED: Use the standard displayProductsInGrid function
+        if (window.displayProductsInGrid) {
+            window.displayProductsInGrid(results);
+        }
+        
+        hasMoreFilteredPages = data.has_next || false;
+        window.hasMoreFilteredPages = hasMoreFilteredPages;
+
+        window.searchResults = results;
+        window.currentSearchQuery = query;
+
+        if (window.onSearchComplete) {
+            window.onSearchComplete(results, query);
+        }
+
+        const hasActiveFilters = hasActiveNonSearchFilters();
+        updateResultsDisplay(results.length, query, hasActiveFilters);
+        closeFilterSidebar();
+
+    } catch (error) {
+        console.error('Search error:', error);
+        updateResultsDisplay(0, query, false, false, 'Search failed. Please try again.');
     }
+
+    updateSearchIndicator();
+}
 
     function updateFilterState() {
         const priceFilter = document.querySelector('input[name="price"]:checked');
@@ -648,87 +656,88 @@ let isLoadingFiltered = false;
     }
 
     async function applyFiltersFromSidebar() {
-        updateFilterState();
+    updateFilterState();
+    
+    currentFilteredPage = 1;
+    hasMoreFilteredPages = true;
+    
+    try {
+        const hasAnyFilters = hasActiveFilters();
         
-        currentFilteredPage = 1;
-        hasMoreFilteredPages = true;
+        if (!hasAnyFilters) {
+            window.isFilterSystemActive = false;
+            
+            window.searchResults = null;
+            window.currentSearchQuery = '';
+            
+            if (window.onSearchClear) {
+                window.onSearchClear();
+            }
+            
+            updateResultsDisplay(0, '', false, false);
+            closeFilterSidebar();
+            return;
+        }
+        
+        window.isFilterSystemActive = true;
+        
+        updateResultsDisplay(0, currentFilters.search, hasActiveNonSearchFilters(), true);
+        
+        let response, data;
+        const params = buildFilterParams(1, 12);
         
         try {
-            const hasAnyFilters = hasActiveFilters();
-            
-            if (!hasAnyFilters) {
-                window.isFilterSystemActive = false;
-                
-                window.searchResults = null;
-                window.currentSearchQuery = '';
-                
-                if (window.onSearchClear) {
-                    window.onSearchClear();
-                }
-                
-                updateResultsDisplay(0, '', false, false);
-                closeFilterSidebar();
-                return;
-            }
-            
-            window.isFilterSystemActive = true;
-            
-            updateResultsDisplay(0, currentFilters.search, hasActiveNonSearchFilters(), true);
-            
-            let response, data;
-            const params = buildFilterParams(1, 12);
-            
-            try {
-                response = await fetch(`${BASE_URL}/products/filtered?${params.toString()}`);
-                if (!response.ok) throw new Error(`Filtered endpoint failed: ${response.status}`);
-                data = await response.json();
-            } catch (filteredError) {
-                if (currentFilters.search) {
-                    response = await fetch(`${BASE_URL}/search?q=${encodeURIComponent(currentFilters.search)}&per_page=50`);
-                } else {
-                    response = await fetch(`${BASE_URL}/products?per_page=50`);
-                }
-                
-                if (!response.ok) throw new Error(`Fallback endpoint failed: ${response.status}`);
-                data = await response.json();
-                
-                data.products = applyClientSideFilters(data.products || []);
-                data.has_next = false;
-            }
-            
-            const filteredProducts = data.products || [];
-            
-            updateGlobalProductArrays(filteredProducts);
-
-            if (window.displayProductsInGrid) {
-                window.displayProductsInGrid(filteredProducts);
-            }
-
-            hasMoreFilteredPages = data.has_next || false;
-            window.hasMoreFilteredPages = hasMoreFilteredPages;
-            
+            response = await fetch(`${BASE_URL}/products/filtered?${params.toString()}`);
+            if (!response.ok) throw new Error(`Filtered endpoint failed: ${response.status}`);
+            data = await response.json();
+        } catch (filteredError) {
             if (currentFilters.search) {
-                window.searchResults = filteredProducts;
-                window.currentSearchQuery = currentFilters.search;
-                
-                if (window.onSearchComplete) {
-                    window.onSearchComplete(filteredProducts, currentFilters.search);
-                }
+                response = await fetch(`${BASE_URL}/search?q=${encodeURIComponent(currentFilters.search)}&per_page=50`);
             } else {
-                window.searchResults = null;
-                window.currentSearchQuery = '';
+                response = await fetch(`${BASE_URL}/products?per_page=50`);
             }
             
-            updateResultsDisplay(filteredProducts.length, currentFilters.search, hasActiveNonSearchFilters());
-            updateFilterUI();
-            closeFilterSidebar();
+            if (!response.ok) throw new Error(`Fallback endpoint failed: ${response.status}`);
+            data = await response.json();
             
-        } catch (error) {
-            console.error('Error applying filters:', error);
-            updateResultsDisplay(0, currentFilters.search, false, false, 'Failed to apply filters. Please try again.');
+            data.products = applyClientSideFilters(data.products || []);
+            data.has_next = false;
         }
-        updateSearchIndicator();
+        
+        const filteredProducts = data.products || [];
+        
+        updateGlobalProductArrays(filteredProducts);
+
+        // FIXED: Use the standard displayProductsInGrid function
+        if (window.displayProductsInGrid) {
+            window.displayProductsInGrid(filteredProducts);
+        }
+
+        hasMoreFilteredPages = data.has_next || false;
+        window.hasMoreFilteredPages = hasMoreFilteredPages;
+        
+        if (currentFilters.search) {
+            window.searchResults = filteredProducts;
+            window.currentSearchQuery = currentFilters.search;
+            
+            if (window.onSearchComplete) {
+                window.onSearchComplete(filteredProducts, currentFilters.search);
+            }
+        } else {
+            window.searchResults = null;
+            window.currentSearchQuery = '';
+        }
+        
+        updateResultsDisplay(filteredProducts.length, currentFilters.search, hasActiveNonSearchFilters());
+        updateFilterUI();
+        closeFilterSidebar();
+        
+    } catch (error) {
+        console.error('Error applying filters:', error);
+        updateResultsDisplay(0, currentFilters.search, false, false, 'Failed to apply filters. Please try again.');
     }
+    updateSearchIndicator();
+}
 
     function applyClientSideFilters(products) {
         let filtered = [...products];
