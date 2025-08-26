@@ -1762,10 +1762,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ===============================
-// ENHANCED EVENT HANDLING SYSTEM
+// ENHANCED EVENT HANDLING SYSTEM - FIXED VERSION
 // ===============================
 
-// Make the event handler globally accessible and persistent
+// Enhanced global click handler that works with both normal and filtered products
 window.handleProductCardClick = function(e) {
     // Prevent processing if already processing a click
     if (isProcessingClick) {
@@ -1781,28 +1781,62 @@ window.handleProductCardClick = function(e) {
     const productId = parseInt(card.getAttribute('data-product-id'));
     if (!productId) return;
     
-    // FIXED: Always get fresh product array from window global
-    const currentProducts = window.allProducts || [];
-    const product = currentProducts.find(p => p.id === productId);
+    // FIXED: Try multiple sources to find the product
+    let product = null;
+    
+    // First, try the current filtered products
+    if (window.allProducts && window.allProducts.length > 0) {
+        product = window.allProducts.find(p => p.id === productId);
+    }
+    
+    // If not found, try the original products array
+    if (!product && originalProducts && originalProducts.length > 0) {
+        product = originalProducts.find(p => p.id === productId);
+    }
+    
+    // If still not found, try the filtered products array
+    if (!product && filteredProducts && filteredProducts.length > 0) {
+        product = filteredProducts.find(p => p.id === productId);
+    }
+    
+    // If still not found, try search results
+    if (!product && window.searchResults && window.searchResults.length > 0) {
+        product = window.searchResults.find(p => p.id === productId);
+    }
+    
+    // If still not found, try the window._allProducts backup
+    if (!product && window._allProducts && window._allProducts.length > 0) {
+        product = window._allProducts.find(p => p.id === productId);
+    }
     
     if (!product) {
-        console.warn(`Product with ID ${productId} not found in current product array`, currentProducts);
+        console.error(`Product with ID ${productId} not found in any product array`);
+        console.log('Available arrays:', {
+            allProducts: window.allProducts?.length || 0,
+            originalProducts: originalProducts?.length || 0,
+            filteredProducts: filteredProducts?.length || 0,
+            searchResults: window.searchResults?.length || 0
+        });
         return;
     }
+    
+    console.log(`Found product: ${product.product_name} (ID: ${productId})`);
     
     // Handle view details button
     if (target.classList.contains('view-details-button') || 
         target.closest('.view-details-button')) {
         e.preventDefault();
         e.stopPropagation();
+        console.log('Opening product modal for:', product.product_name);
         openProductModal(product);
         return;
     }
     
-    // Handle card content click
+    // Handle card content click (open modal)
     if (target.closest('.product-card-content')) {
         e.preventDefault();
         e.stopPropagation();
+        console.log('Card content clicked, opening modal for:', product.product_name);
         openProductModal(product);
         return;
     }
@@ -1815,7 +1849,14 @@ window.handleProductCardClick = function(e) {
         
         if (isProcessingClick) return;
         
+        console.log('Add to cart clicked for:', product.product_name);
         const quantity = addToCart(product);
+        
+        // Force refresh the display to update button states
+        setTimeout(() => {
+            refreshFilteredProductsDisplay();
+        }, 100);
+        
         return;
     }
     
@@ -1827,10 +1868,28 @@ window.handleProductCardClick = function(e) {
         
         if (isProcessingClick) return;
         
+        console.log('Request quote clicked for:', product.product_name);
         const quantity = addToQuotation(product);
+        
+        // Force refresh the display to update button states
+        setTimeout(() => {
+            refreshFilteredProductsDisplay();
+        }, 100);
+        
         return;
     }
 };
+
+// FIXED: Enhanced function to refresh filtered products display
+function refreshFilteredProductsDisplay() {
+    // Get the currently displayed products
+    const currentProducts = window.allProducts || filteredProducts || originalProducts || [];
+    
+    if (currentProducts.length > 0) {
+        console.log('Refreshing filtered products display with', currentProducts.length, 'products');
+        displayProductsInGrid(currentProducts);
+    }
+}
 
 // FIXED: Enhanced event listener management
 let isEventListenerAttached = false;
@@ -1838,27 +1897,28 @@ let isEventListenerAttached = false;
 function ensureEventListenersAttached() {
     // Only attach once to prevent multiple listeners
     if (!isEventListenerAttached) {
-        // Use the globally accessible handler
-        document.addEventListener('click', window.handleProductCardClick, true); // Use capture phase
+        // Remove any existing listener first
+        document.removeEventListener('click', window.handleProductCardClick, true);
+        
+        // Use the globally accessible handler with capture phase
+        document.addEventListener('click', window.handleProductCardClick, true);
         isEventListenerAttached = true;
         console.log('Event listeners attached for product cards (one-time setup)');
-    } else {
-        console.log('Event listeners already attached, skipping...');
     }
 }
 
-// FIXED: Reset event listener system when needed
-window.resetEventListeners = function() {
-    if (isEventListenerAttached) {
-        document.removeEventListener('click', window.handleProductCardClick, true);
-        isEventListenerAttached = false;
-    }
+// FIXED: Function to force re-attach event listeners if needed
+window.forceReattachEventListeners = function() {
+    console.log('Force re-attaching event listeners...');
+    document.removeEventListener('click', window.handleProductCardClick, true);
+    isEventListenerAttached = false;
     ensureEventListenersAttached();
-    console.log('Event listeners reset and reattached');
 };
 
-// FIXED: Enhanced display function
+// FIXED: Enhanced display function that ensures proper data synchronization
 function displayProductsInGrid(products) {
+    console.log('Displaying products in grid:', products.length, 'products');
+    
     const productsGrid = document.getElementById('products-grid');
     const loadingIndicator = document.getElementById('infinite-scroll-loading');
     const endIndicator = document.getElementById('end-of-products');
@@ -1888,13 +1948,21 @@ function displayProductsInGrid(products) {
         return;
     }
     
+    // FIXED: Ensure window.allProducts is always synchronized
+    window.allProducts = products;
+    window._allProducts = products; // Backup reference
+    
     const productCards = products.map(product => createProductCard(product)).join('');
     if (productsGrid) {
         productsGrid.innerHTML = productCards;
     }
     
-    // FIXED: Ensure event listeners are attached (but only once)
+    // FIXED: Ensure event listeners are attached
     ensureEventListenersAttached();
+    
+    // FIXED: Add debug logging
+    console.log('Products grid updated with', products.length, 'products');
+    console.log('Event listener attached:', isEventListenerAttached);
     
     if (window.isSearchMode && window.isSearchMode() && endIndicator) {
         endIndicator.style.display = 'block';
@@ -1902,20 +1970,151 @@ function displayProductsInGrid(products) {
     }
 }
 
-// FIXED: Enhanced function for appending products (used by filter system)
-window.appendProductsToGrid = function(newProducts) {
-    const productsGrid = document.getElementById('products-grid');
-    if (!productsGrid || !newProducts || newProducts.length === 0) return;
+// FIXED: Enhanced apply filters function
+function applyFilters() {
+    console.log('Applying filters...');
     
-    const newProductCards = newProducts.map(product => createProductCard(product)).join('');
-    productsGrid.innerHTML += newProductCards;
+    const priceFilters = document.querySelectorAll('input[name="price"]:checked');
+    const brandFilters = document.querySelectorAll('.brand-options input[type="checkbox"]:checked');
     
-    // Event listeners are already attached globally, no need to re-attach
-    console.log(`Appended ${newProducts.length} products to grid`);
+    // Get the products to filter (either search results or original products)
+    const sourceProducts = window.searchResults || originalProducts;
+    
+    let filtered = [...sourceProducts];
+    const hasActiveFilters = priceFilters.length > 0 || brandFilters.length > 0;
+    
+    // Apply price filters
+    if (priceFilters.length > 0) {
+        filtered = filtered.filter(product => {
+            const price = product.offer_price || product.mrp || 0;
+            
+            return Array.from(priceFilters).some(filter => {
+                const filterText = filter.parentElement.textContent.trim();
+                
+                if (filterText.includes('Under â‚¹1,000')) {
+                    return price < 1000;
+                } else if (filterText.includes('â‚¹1,000 - â‚¹3,000')) {
+                    return price >= 1000 && price <= 3000;
+                } else if (filterText.includes('â‚¹3,000 - â‚¹5,000')) {
+                    return price >= 3000 && price <= 5000;
+                } else if (filterText.includes('Above â‚¹5,000')) {
+                    return price > 5000;
+                }
+                return true;
+            });
+        });
+    }
+    
+    // Apply brand filters
+    if (brandFilters.length > 0) {
+        const selectedBrands = Array.from(brandFilters).map(cb => cb.value.toLowerCase());
+        filtered = filtered.filter(product => {
+            const productName = (product.product_name || '').toLowerCase();
+            const manufacturer = (product.manufacturer || '').toLowerCase();
+            const category = (product.category || '').toLowerCase();
+            
+            return selectedBrands.some(brand => 
+                productName.includes(brand) || 
+                manufacturer.includes(brand) || 
+                category.includes(brand)
+            );
+        });
+    }
+    
+    // FIXED: Update all relevant arrays
+    filteredProducts = filtered;
+    window.allProducts = filtered;
+    window._allProducts = filtered; // Backup
+    
+    console.log('Filtered products:', filtered.length, 'out of', sourceProducts.length);
+    
+    // Display filtered products
+    displayProductsInGrid(filtered);
+    
+    // Update results display text
+    const currentQuery = window.currentSearchQuery || '';
+    updateResultsDisplayText(filtered.length, currentQuery, hasActiveFilters);
+    
+    // Update filter UI
+    updateFilterUI();
+}
+
+// FIXED: Integration with filter system
+window.onFilterSystemUpdate = function(filteredProducts) {
+    console.log('Filter system update received with', filteredProducts.length, 'products');
+    
+    // Update all product arrays
+    window.allProducts = filteredProducts;
+    window._allProducts = filteredProducts;
+    
+    // Ensure event listeners are attached
+    ensureEventListenersAttached();
+    
+    // Force a small delay to ensure DOM is updated
+    setTimeout(() => {
+        console.log('Post-filter update: checking event listeners...');
+        if (!isEventListenerAttached) {
+            console.warn('Event listeners not attached after filter update, forcing re-attach...');
+            window.forceReattachEventListeners();
+        }
+    }, 50);
 };
 
-// Update the existing ensureEventListenersAttached export
+// FIXED: Export the enhanced refresh function
+window.refreshFilteredProductsDisplay = refreshFilteredProductsDisplay;
+
+// FIXED: Override the existing exports with enhanced versions
+window.displayProductsInGrid = displayProductsInGrid;
+window.applyFilters = applyFilters;
 window.ensureEventListenersAttached = ensureEventListenersAttached;
+
+// FIXED: Enhanced initialization
+function initializeEnhancedEventSystem() {
+    console.log('Initializing enhanced event system...');
+    
+    // Ensure event listeners are attached
+    ensureEventListenersAttached();
+    
+    // Add a mutation observer to detect when filter system updates the DOM
+    if (window.MutationObserver) {
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'childList' && mutation.target.id === 'products-grid') {
+                    console.log('Products grid DOM changed, ensuring event listeners...');
+                    // Small delay to ensure DOM is fully updated
+                    setTimeout(() => {
+                        ensureEventListenersAttached();
+                    }, 10);
+                }
+            });
+        });
+        
+        const productsGrid = document.getElementById('products-grid');
+        if (productsGrid) {
+            observer.observe(productsGrid, { childList: true, subtree: true });
+            console.log('Mutation observer attached to products grid');
+        }
+    }
+    
+    // Add periodic check as backup
+    setInterval(() => {
+        if (!isEventListenerAttached) {
+            console.warn('Event listener missing, re-attaching...');
+            ensureEventListenersAttached();
+        }
+    }, 5000);
+    
+    console.log('Enhanced event system initialized');
+}
+
+// FIXED: Auto-initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeEnhancedEventSystem);
+} else {
+    // DOM already loaded
+    setTimeout(initializeEnhancedEventSystem, 100);
+}
+
 
 // ===============================
 // INITIALIZATION UPDATES
@@ -1924,12 +2123,95 @@ window.ensureEventListenersAttached = ensureEventListenersAttached;
 // Update the DOMContentLoaded section
 document.addEventListener('DOMContentLoaded', () => {
     try {
-        // ... existing initialization code ...
+        // Restore saved state
+        try {
+            const savedCart = localStorage.getItem('cartItems');
+            const savedQuotation = localStorage.getItem('quotationItems');
+            if (savedCart) window.cartItems = JSON.parse(savedCart);
+            if (savedQuotation) window.quotationItems = JSON.parse(savedQuotation);
+        } catch (error) {
+            console.log('Could not restore saved state:', error);
+        }
         
-        // FIXED: Set up event listeners once during initialization
-        ensureEventListenersAttached();
+        // Setup history management
+        window.addEventListener('popstate', handlePopState);
         
-        // Rest of existing initialization...
+        window.addEventListener('beforeunload', (e) => {
+            // Save state
+            try {
+                localStorage.setItem('cartItems', JSON.stringify(window.cartItems));
+                localStorage.setItem('quotationItems', JSON.stringify(window.quotationItems));
+            } catch (error) {
+                console.log('Could not save state:', error);
+            }
+            
+            if (isModalOpen) {
+                e.preventDefault();
+                return '';
+            }
+        });
+        
+        // Load initial products
+        loadProducts(1, false);
+        
+        // Setup infinite scroll
+        setupInfiniteScroll();
+        
+        // Initialize enhanced event system
+        initializeEnhancedEventSystem();
+        
+        // Modal event listeners
+        const modalAddToCartBtn = document.getElementById('modalAddToCart');
+        if (modalAddToCartBtn) {
+            modalAddToCartBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (modalAddToCartBtn.disabled || !currentModalProduct || isProcessingClick) return;
+                
+                try {
+                    const quantity = addToCart(currentModalProduct);
+                    
+                    if (quantity > 0) {
+                        updateModalCartButton();
+                    }
+                } catch (error) {
+                    console.error('Error adding to cart from modal:', error);
+                    alert('Error adding product to cart');
+                }
+            });
+        }
+        
+        // Close button
+        const closeBtn = document.getElementById('closeModalBtn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeProductModal);
+        }
+        
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && isModalOpen) {
+                closeProductModal();
+            }
+        });
+        
+        // Close modal on background click
+        const modal = document.getElementById('productModal');
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeProductModal();
+                }
+            });
+            
+            const modalContent = modal.querySelector('.product-modal-content');
+            if (modalContent) {
+                modalContent.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
+            }
+        }
+        
         console.log('Combined Products & Quotation component initialized successfully');
         
     } catch (error) {
