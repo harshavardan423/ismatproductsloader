@@ -255,24 +255,7 @@ let isLoadingFiltered = false;
         console.log('Filter infinite scroll enabled');
     }
 
-    // Initialize the filter system
-    function initializeFilterSystem() {
-        filterSidebar = document.getElementById('filter-sidebar');
-        filterOverlay = document.getElementById('filter-sidebar-overlay');
-        
-        if (!filterSidebar || !filterOverlay) {
-            console.error('Filter sidebar elements not found');
-            return;
-        }
-
-        setupEventListeners(); // This now includes all event listeners
-        setupFilteredInfiniteScroll();
-        
-        // Auto-test endpoints on load
-        setTimeout(debugTestEndpoints, 1000);
-    }
-
-    // Setup all event listeners
+    // Setup all event listeners - MOVED ALL EVENT LISTENERS HERE
     function setupEventListeners() {
         // Button to open filter
         const filterButton = document.getElementById('product-filter-search');
@@ -304,10 +287,8 @@ let isLoadingFiltered = false;
                 if (clearSearchBtn) {
                     clearSearchBtn.style.display = hasValue ? 'flex' : 'none';
                 }
-                // MOVED HERE: Update search indicator on input
-                setTimeout(() => {
-                    updateSearchIndicator();
-                }, 100);
+                // Update search indicator on input change
+                setTimeout(updateSearchIndicator, 100);
             });
         }
         
@@ -335,10 +316,8 @@ let isLoadingFiltered = false;
                 e.target.matches('.category-option input')) {
                 updateFilterState();
                 updateFilterUI();
-                // MOVED HERE: Update search indicator on filter change
-                setTimeout(() => {
-                    updateSearchIndicator();
-                }, 100);
+                // Update search indicator on filter change
+                setTimeout(updateSearchIndicator, 100);
             }
         });
 
@@ -349,17 +328,35 @@ let isLoadingFiltered = false;
             }
         });
 
-        // MOVED HERE: Initialize search indicator after DOM is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() {
-                updateSearchIndicator();
-            });
-        } else {
-            // DOM is already loaded, update immediately
+        // Initialize search indicator - ONLY after DOM is ready
+        if (document.readyState === 'complete') {
             updateSearchIndicator();
+        } else {
+            window.addEventListener('load', updateSearchIndicator);
         }
+
+        console.log('✅ All event listeners attached');
     }
 
+    // Initialize the filter system - ONLY call functions that are defined
+    function initializeFilterSystem() {
+        filterSidebar = document.getElementById('filter-sidebar');
+        filterOverlay = document.getElementById('filter-sidebar-overlay');
+        
+        if (!filterSidebar || !filterOverlay) {
+            console.error('Filter sidebar elements not found');
+            return;
+        }
+
+        // Call functions in correct order
+        setupEventListeners(); 
+        setupFilteredInfiniteScroll();
+        
+        // Auto-test endpoints on load
+        setTimeout(debugTestEndpoints, 1000);
+        
+        console.log('✅ Filter system initialized');
+    }
 
     // Check if any filters are currently active
     function hasActiveFilters() {
@@ -1025,24 +1022,20 @@ let isLoadingFiltered = false;
         })
     };
 
-    // Initialize when DOM is ready
+    // Make functions globally available
+    window.openFilterSidebar = openFilterSidebar;
+    window.closeFilterSidebar = closeFilterSidebar;
+    window.updateSearchIndicator = updateSearchIndicator;
+    window.setupFilteredInfiniteScroll = setupFilteredInfiniteScroll;
+
+    // Initialize when DOM is ready - SINGLE INITIALIZATION POINT
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initializeFilterSystem);
     } else {
         initializeFilterSystem();
     }
 
-    window.openFilterSidebar = openFilterSidebar;
-    window.closeFilterSidebar = closeFilterSidebar;
-    window.updateSearchIndicator = updateSearchIndicator;
-    window.setupFilteredInfiniteScroll = setupFilteredInfiniteScroll;
+    // Console debugging info
+    console.log('🔍 FILTER SYSTEM LOADED');
 
-     console.log(`
-🔍 FILTER SYSTEM LOADED
-Debug commands:
-- window.debugTestEndpoints() - Test all endpoints
-- window.filterDebugInfo.getFilterState() - Check filter state
-- window.retryLoadFilterOptions() - Retry loading filters
-    `);
-
-})(); 
+})(); // END OF IIFE - NOTHING AFTER THIS LINE
