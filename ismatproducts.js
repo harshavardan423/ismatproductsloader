@@ -1,9 +1,55 @@
 // ===============================
-// COMBINED PRODUCTS & FILTER SYSTEM
+// COMBINED PRODUCTS & FILTER SYSTEM - FIXED VERSION
 // ===============================
 
 (function() {
     'use strict';
+
+    // ===============================
+    // WHATSAPP BLOCKING SYSTEM - ADD THIS FIRST
+    // ===============================
+    
+    // Override window.open to block WhatsApp
+    const originalWindowOpen = window.open;
+    window.open = function(url, ...args) {
+        if (url && (url.includes('whatsapp') || url.includes('wa.me') || url.includes('api.whatsapp'))) {
+            console.log('🚫 BLOCKED WhatsApp window.open:', url);
+            console.trace('Call stack trace:');
+            return null; // Block the WhatsApp opening
+        }
+        return originalWindowOpen.call(this, url, ...args);
+    };
+    
+    // Override location.href changes
+    let originalHref = window.location.href;
+    Object.defineProperty(window.location, 'href', {
+        get: function() { return originalHref; },
+        set: function(url) {
+            if (url && (url.includes('whatsapp') || url.includes('wa.me') || url.includes('api.whatsapp'))) {
+                console.log('🚫 BLOCKED WhatsApp location.href:', url);
+                console.trace('Call stack trace:');
+                return;
+            }
+            originalHref = url;
+            window.location.replace(url);
+        }
+    });
+    
+    // Block any programmatic link clicks to WhatsApp
+    document.addEventListener('click', function(e) {
+        const target = e.target;
+        const link = target.tagName === 'A' ? target : target.closest('a');
+        
+        if (link && link.href && (link.href.includes('whatsapp') || link.href.includes('wa.me') || link.href.includes('api.whatsapp'))) {
+            console.log('🚫 BLOCKED WhatsApp link click:', link.href);
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            return false;
+        }
+    }, true);
+    
+    console.log('✅ WhatsApp blocking system activated');
 
     // ===============================
     // GLOBAL STATE MANAGEMENT
@@ -60,6 +106,41 @@
     let currentFilteredPage = 1;
     let hasMoreFilteredPages = false;
     let isLoadingFiltered = false;
+
+    // ===============================
+    // OVERRIDE PROBLEMATIC FUNCTIONS
+    // ===============================
+
+    // Override updateQuotationButton to prevent WhatsApp opening
+    window.updateQuotationButton = function() {
+        console.log('✅ Safe quote button update, items:', window.quotationItems.length);
+        
+        // Update button text/appearance only - NO WhatsApp opening
+        const quoteBtns = document.querySelectorAll('.quotation-button, #quotation-btn, [data-action="quotation"], .quote-button');
+        quoteBtns.forEach(btn => {
+            if (btn) {
+                const count = window.quotationItems.length;
+                if (count > 0) {
+                    btn.textContent = `Quote (${count})`;
+                    btn.classList.add('has-items');
+                } else {
+                    btn.textContent = 'Request Quote';
+                    btn.classList.remove('has-items');
+                }
+            }
+        });
+        
+        // Update any quote badges
+        const quoteBadges = document.querySelectorAll('.quote-badge, .quotation-badge');
+        quoteBadges.forEach(badge => {
+            if (badge) {
+                badge.textContent = window.quotationItems.length;
+                badge.style.display = window.quotationItems.length > 0 ? 'inline' : 'none';
+            }
+        });
+        
+        // DO NOT OPEN WHATSAPP - EVER
+    };
 
     // ===============================
     // CORE UTILITY FUNCTIONS
@@ -278,19 +359,14 @@
     }
 
     // ===============================
-    // QUOTATION MANAGEMENT FUNCTIONS
+    // QUOTATION MANAGEMENT FUNCTIONS - FIXED
     // ===============================
 
-    // Function to add item to quotation with debouncing
-    function addToQuotation(product) {
-        if (!product || isProcessingClick) return 0;
+    // SAFE function to add item to quotation - NO WHATSAPP
+    function addToQuotationSafe(product) {
+        if (!product) return 0;
         
-        isProcessingClick = true;
-        
-        // Add a small delay to prevent rapid multiple clicks
-        setTimeout(() => {
-            isProcessingClick = false;
-        }, 500);
+        console.log('🔒 Adding to quotation safely - NO WhatsApp will open');
         
         const existingItem = window.quotationItems.find(item => 
             item.id === product.id && 
@@ -299,39 +375,38 @@
         
         if (existingItem) {
             existingItem.quantity += 1;
+        } else {
+            const price = product.offer_price || product.mrp || 0;
+            const finalPrice = selectedVariant ? (selectedVariant.price || price) : price;
             
-            if (window.updateQuotationButton) {
-                window.updateQuotationButton();
-            }
+            const newItem = {
+                id: product.id,
+                name: product.product_name,
+                price: parseFloat(finalPrice),
+                image: getImageUrl(product.product_image_urls && product.product_image_urls[0]),
+                category: product.category,
+                quantity: 1,
+                selectedVariant: selectedVariant ? {
+                    name: selectedVariant.name,
+                    price: selectedVariant.price,
+                    sku: selectedVariant.sku || product.sku
+                } : null
+            };
             
-            return existingItem.quantity;
+            window.quotationItems.push(newItem);
         }
         
-        const price = product.offer_price || product.mrp || 0;
-        const finalPrice = selectedVariant ? (selectedVariant.price || price) : price;
+        // Call our SAFE update function
+        window.updateQuotationButton();
         
-        const newItem = {
-            id: product.id,
-            name: product.product_name,
-            price: parseFloat(finalPrice),
-            image: getImageUrl(product.product_image_urls && product.product_image_urls[0]),
-            category: product.category,
-            quantity: 1,
-            selectedVariant: selectedVariant ? {
-                name: selectedVariant.name,
-                price: selectedVariant.price,
-                sku: selectedVariant.sku || product.sku
-            } : null
-        };
+        console.log('✅ Added to quotation successfully without opening WhatsApp');
         
-        window.quotationItems.push(newItem);
-        
-        if (window.updateQuotationButton) {
-            window.updateQuotationButton();
-        }
-        
-        // Just add to quotation cart - no automatic WhatsApp opening
-        return 1;
+        return existingItem ? existingItem.quantity : 1;
+    }
+
+    // Keep original function but make it safe
+    function addToQuotation(product) {
+        return addToQuotationSafe(product);
     }
 
     // Function to check if item is in quotation
@@ -460,10 +535,10 @@
     }
 
     // ===============================
-    // EVENT HANDLING - UNIFIED SYSTEM
+    // EVENT HANDLING - UNIFIED SYSTEM - FIXED
     // ===============================
 
-    // Main event handler for all product card interactions
+    // Main event handler for all product card interactions - FIXED
     function handleProductCardClick(e) {
         // Prevent processing if already processing a click
         if (isProcessingClick) {
@@ -517,54 +592,44 @@
             return;
         }
         
-        // Handle request quote
+        // Handle request quote - COMPLETELY FIXED
         if (target.classList.contains('request-quote') || 
             target.closest('.request-quote')) {
             e.preventDefault();
             e.stopPropagation();
+            e.stopImmediatePropagation(); // Extra protection
             
             if (isProcessingClick) return;
             
-            // Block any automatic actions and just add to quote cart
+            // Block everything and use our safe function
             isProcessingClick = true;
             setTimeout(() => {
                 isProcessingClick = false;
-            }, 500);
+            }, 1000); // Longer timeout for safety
             
-            // Add to quotation cart directly - NO WhatsApp opening
-            const existingItem = window.quotationItems.find(item => 
-                item.id === product.id && 
-                (item.selectedVariant?.name || null) === (selectedVariant?.name || null)
-            );
-            
-            if (existingItem) {
-                existingItem.quantity += 1;
-            } else {
-                const price = product.offer_price || product.mrp || 0;
-                const finalPrice = selectedVariant ? (selectedVariant.price || price) : price;
+            try {
+                console.log('🔒 Processing quote request safely...');
                 
-                const newItem = {
-                    id: product.id,
-                    name: product.product_name,
-                    price: parseFloat(finalPrice),
-                    image: getImageUrl(product.product_image_urls && product.product_image_urls[0]),
-                    category: product.category,
-                    quantity: 1,
-                    selectedVariant: selectedVariant ? {
-                        name: selectedVariant.name,
-                        price: selectedVariant.price,
-                        sku: selectedVariant.sku || product.sku
-                    } : null
-                };
+                // Use our SAFE function that never opens WhatsApp
+                const result = addToQuotationSafe(product);
                 
-                window.quotationItems.push(newItem);
+                console.log('✅ Quote processed safely, quantity:', result);
+                
+                // Update the button appearance
+                const quoteBtn = target.classList.contains('request-quote') ? target : target.closest('.request-quote');
+                if (quoteBtn) {
+                    const quantity = getQuotationQuantity(product.id);
+                    if (quantity > 0) {
+                        quoteBtn.classList.add('quoted');
+                        quoteBtn.title = `Quoted (${quantity})`;
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error in quote processing:', error);
             }
             
-            if (window.updateQuotationButton) {
-                window.updateQuotationButton();
-            }
-            
-            return;
+            return false; // Prevent any further propagation
         }
     }
 
@@ -1856,55 +1921,29 @@
         refreshDisplay();
     }
 
+    // FIXED modal quote handler - guaranteed no WhatsApp
     function handleModalQuoteClick(e) {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         
         if (!currentModalProduct || isProcessingClick) return;
         
         try {
-            // Block any WhatsApp opening completely
-            if (isProcessingClick) return;
+            console.log('🔒 Modal quote click - using safe method');
             
+            // Block everything with timeout
             isProcessingClick = true;
             setTimeout(() => {
                 isProcessingClick = false;
-            }, 500);
+            }, 1000);
             
-            // Just add to quotation - NO WhatsApp
-            const existingItem = window.quotationItems.find(item => 
-                item.id === currentModalProduct.id && 
-                (item.selectedVariant?.name || null) === (selectedVariant?.name || null)
-            );
-            
-            if (existingItem) {
-                existingItem.quantity += 1;
-            } else {
-                const price = currentModalProduct.offer_price || currentModalProduct.mrp || 0;
-                const finalPrice = selectedVariant ? (selectedVariant.price || price) : price;
-                
-                const newItem = {
-                    id: currentModalProduct.id,
-                    name: currentModalProduct.product_name,
-                    price: parseFloat(finalPrice),
-                    image: getImageUrl(currentModalProduct.product_image_urls && currentModalProduct.product_image_urls[0]),
-                    category: currentModalProduct.category,
-                    quantity: 1,
-                    selectedVariant: selectedVariant ? {
-                        name: selectedVariant.name,
-                        price: selectedVariant.price,
-                        sku: selectedVariant.sku || currentModalProduct.sku
-                    } : null
-                };
-                
-                window.quotationItems.push(newItem);
-            }
-            
-            if (window.updateQuotationButton) {
-                window.updateQuotationButton();
-            }
+            // Use our SAFE function
+            const result = addToQuotationSafe(currentModalProduct);
             
             updateModalQuoteButton();
+            
+            console.log('✅ Modal quote processed safely, quantity:', result);
             
         } catch (error) {
             console.error('Error adding to quotation from modal:', error);
@@ -2054,11 +2093,21 @@
     }
 
     // ===============================
-    // CSS STYLES
+    // CSS STYLES + WHATSAPP BLOCKING STYLES
     // ===============================
 
     const combinedStyles = document.createElement('style');
     combinedStyles.textContent = `
+        /* Block WhatsApp links completely */
+        a[href*="whatsapp"],
+        a[href*="wa.me"],
+        a[href*="api.whatsapp"] {
+            pointer-events: none !important;
+            cursor: default !important;
+            color: inherit !important;
+            text-decoration: none !important;
+        }
+        
         .cart-actions-container {
             display: flex;
             flex-direction: row;
@@ -2235,7 +2284,7 @@
     window.displayProductsInGrid = displayProductsInGrid;
     window.appendProductsToGrid = appendProductsToGrid;
     window.addToCart = addToCart;
-    window.addToQuotation = addToQuotation;
+    window.addToQuotation = addToQuotationSafe; // Use the safe version
     window.isInCart = isInCart;
     window.isInQuotation = isInQuotation;
     window.getCartQuantity = getCartQuantity;
@@ -2313,6 +2362,7 @@
         setTimeout(updateSearchIndicator, 500);
         
         console.log('✅ Combined Products & Filter System initialized successfully');
+        console.log('🚫 WhatsApp blocking is ACTIVE - no WhatsApp will open from quote buttons');
     }
 
     // Initialize when DOM is ready
@@ -2322,6 +2372,6 @@
         setTimeout(initializeCombinedSystem, 100);
     }
 
-    console.log('🔍 Combined system loaded and ready');
+    console.log('🔍 Combined system with WhatsApp blocking loaded and ready');
 
 })();
