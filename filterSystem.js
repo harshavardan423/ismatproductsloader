@@ -1,7 +1,6 @@
 let hasMoreFilteredPages = true;
 let isLoadingFiltered = false;
 
-// STEP 1: Define all functions inside IIFE but DO NOT call any of them
 (function() {
     'use strict';
     
@@ -18,38 +17,103 @@ let isLoadingFiltered = false;
         categories: []
     };
 
-    // Infinite scroll state for filtered results
     let currentFilteredPage = 1;
     let hasMoreFilteredPages = false;
     let isLoadingFiltered = false;
 
-    // Base URL for API calls
     const BASE_URL = 'https://admin.ismatindia.com:7000';
 
-    // CRITICAL FIX: Function to sync product data between the two systems
     function updateGlobalProductArrays(products) {
-        if (typeof window.allProducts !== 'undefined') {
-            window.allProducts = products;
-        } else {
-            window.allProducts = products;
-        }
-        
+        window.allProducts = products;
         if (typeof window.originalProducts !== 'undefined') {
             window.originalProducts = products;
-        } else {
-            window.originalProducts = products;
         }
-        
         if (typeof window.filteredProducts !== 'undefined') {
             window.filteredProducts = products;
-        } else {
-            window.filteredProducts = products;
         }
-        
         console.log(`Updated global product arrays with ${products.length} products`);
     }
 
-    // Simple specification detection
+    async function debugTestEndpoints() {
+        console.log('=== FILTER DEBUG TEST ===');
+        
+        try {
+            const basicResponse = await fetch(`${BASE_URL}/products?page=1`);
+            if (basicResponse.ok) {
+                const basicData = await basicResponse.json();
+                console.log('✅ Basic products working:', basicData.products?.length, 'products found');
+            }
+        } catch (error) {
+            console.error('❌ Basic products error:', error);
+        }
+        
+        try {
+            const filterResponse = await fetch(`${BASE_URL}/products/filter-options`);
+            if (filterResponse.ok) {
+                const filterData = await filterResponse.json();
+                console.log('✅ Filter options working:', filterData);
+                return filterData;
+            } else {
+                throw new Error(`Filter endpoint failed: ${filterResponse.status}`);
+            }
+        } catch (error) {
+            console.error('❌ Filter options error:', error);
+            return await fallbackExtractFilters();
+        }
+    }
+
+    async function fallbackExtractFilters() {
+        console.log('🔄 Using fallback filter extraction...');
+        
+        try {
+            let allProducts = [];
+            let page = 1;
+            let hasMore = true;
+            
+            while (hasMore && page <= 5) {
+                const response = await fetch(`${BASE_URL}/products?page=${page}&per_page=50`);
+                if (!response.ok) break;
+                
+                const data = await response.json();
+                allProducts = allProducts.concat(data.products || []);
+                hasMore = data.current_page < data.total_pages && page < 5;
+                page++;
+            }
+            
+            const categories = new Set();
+            const brands = new Set();
+            
+            allProducts.forEach(product => {
+                if (product.category && product.category.trim()) {
+                    categories.add(product.category.trim());
+                }
+                
+                if (product.manufacturer && product.manufacturer.trim()) {
+                    const manufacturer = product.manufacturer.trim();
+                    if (!isSimpleSpecification(manufacturer)) {
+                        brands.add(manufacturer);
+                    }
+                }
+            });
+            
+            return {
+                categories: Array.from(categories).sort(),
+                brands: Array.from(brands).sort(),
+                price_stats: { min: 0, max: 10000, avg: 1000 },
+                stock_stats: { total: allProducts.length, in_stock: 0, low_stock: 0, out_of_stock: 0 }
+            };
+            
+        } catch (error) {
+            console.error('❌ Fallback extraction failed:', error);
+            return {
+                categories: ['Tools', 'Hardware', 'Electrical', 'Accessories', 'Safety Equipment'],
+                brands: ['Bosch', 'Stanley', 'DeWalt', 'Black & Decker', 'Makita'],
+                price_stats: { min: 0, max: 10000, avg: 1000 },
+                stock_stats: { total: 100, in_stock: 80, low_stock: 15, out_of_stock: 5 }
+            };
+        }
+    }
+
     function isSimpleSpecification(text) {
         const specPatterns = [
             /^\d+[\w]*$/,
@@ -63,7 +127,6 @@ let isLoadingFiltered = false;
         return specPatterns.some(pattern => pattern.test(text.trim()));
     }
 
-    // Function to update search indicator
     function updateSearchIndicator() {
         const searchButton = document.querySelector('.searchbutton');
         if (!searchButton) return;
@@ -101,7 +164,6 @@ let isLoadingFiltered = false;
         }
     }
 
-    // Setup infinite scroll for filtered results
     function setupFilteredInfiniteScroll() {
         let ticking = false;
         
@@ -143,7 +205,96 @@ let isLoadingFiltered = false;
         console.log('Filter infinite scroll enabled');
     }
 
-    // Load more filtered products for infinite scroll
+    function initializeFilterSystem() {
+        filterSidebar = document.getElementById('filter-sidebar');
+        filterOverlay = document.getElementById('filter-sidebar-overlay');
+        
+        if (!filterSidebar || !filterOverlay) {
+            console.error('Filter sidebar elements not found');
+            return;
+        }
+
+        setupEventListeners(); 
+        setupFilteredInfiniteScroll();
+        
+        setTimeout(debugTestEndpoints, 1000);
+        setTimeout(updateSearchIndicator, 500);
+        
+        console.log('✅ Filter system initialized');
+    }
+
+    function setupEventListeners() {
+        const filterButton = document.getElementById('product-filter-search');
+        if (filterButton) {
+            filterButton.addEventListener('click', openFilterSidebar);
+        }
+
+        document.getElementById('close-filter-sidebar')?.addEventListener('click', closeFilterSidebar);
+        filterOverlay?.addEventListener('click', closeFilterSidebar);
+
+        const searchInput = document.getElementById('product-search-input');
+        const searchBtn = document.getElementById('search-products-btn');
+        const clearSearchBtn = document.getElementById('clear-search-btn');
+        
+        if (searchInput && searchBtn) {
+            searchBtn.addEventListener('click', performSearch);
+            searchInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    performSearch();
+                }
+            });
+            
+            searchInput.addEventListener('input', function(e) {
+                const hasValue = e.target.value.trim().length > 0;
+                if (clearSearchBtn) {
+                    clearSearchBtn.style.display = hasValue ? 'flex' : 'none';
+                }
+                setTimeout(updateSearchIndicator, 100);
+            });
+        }
+        
+        if (clearSearchBtn) {
+            clearSearchBtn.addEventListener('click', clearSearchInput);
+        }
+
+        const brandSearch = document.getElementById('brand-search');
+        if (brandSearch) {
+            brandSearch.addEventListener('input', function(e) {
+                filterBrandsInSidebar(e.target.value);
+            });
+        }
+
+        document.getElementById('apply-filters-btn')?.addEventListener('click', applyFiltersFromSidebar);
+        document.getElementById('clear-filters-btn')?.addEventListener('click', clearAllFiltersFromSidebar);
+
+        document.addEventListener('change', function(e) {
+            if (e.target.matches('input[name="price"]') || 
+                e.target.matches('input[name="stock"]') || 
+                e.target.matches('.brand-option input') ||
+                e.target.matches('.category-option input')) {
+                updateFilterState();
+                updateFilterUI();
+                setTimeout(updateSearchIndicator, 100);
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && filterSidebar?.classList.contains('active')) {
+                closeFilterSidebar();
+            }
+        });
+
+        console.log('✅ All event listeners attached');
+    }
+
+    function hasActiveFilters() {
+        return currentFilters.search || 
+               currentFilters.price || 
+               currentFilters.stock.length > 0 || 
+               currentFilters.brands.length > 0 || 
+               currentFilters.categories.length > 0;
+    }
+
     async function loadMoreFilteredProducts() {
         if (isLoadingFiltered || !hasMoreFilteredPages) return;
         
@@ -151,8 +302,6 @@ let isLoadingFiltered = false;
         const nextPage = currentFilteredPage + 1;
         
         try {
-            console.log(`Loading filtered page ${nextPage}`);
-            
             const params = buildFilterParams(nextPage, 12);
             const response = await fetch(`${BASE_URL}/products/filtered?${params.toString()}`);
             
@@ -175,6 +324,11 @@ let isLoadingFiltered = false;
                     }).join('');
                     
                     productsGrid.innerHTML += newProductCards;
+                    
+                    // CRITICAL: Ensure event listeners are attached to new cards
+                    if (window.ensureEventListenersAttached) {
+                        window.ensureEventListenersAttached();
+                    }
                 }
                 
                 currentFilteredPage = nextPage;
@@ -193,7 +347,6 @@ let isLoadingFiltered = false;
         }
     }
 
-    // Build URL parameters for filter requests
     function buildFilterParams(page = 1, perPage = 12) {
         const params = new URLSearchParams();
         
@@ -244,15 +397,14 @@ let isLoadingFiltered = false;
         return params;
     }
 
-    // All other functions (keeping them short here for brevity)
-    function openFilterSidebar() {
+    async function openFilterSidebar() {
         if (filterSidebar && filterOverlay) {
             filterSidebar.classList.add('active');
             filterOverlay.classList.add('active');
             document.body.style.overflow = 'hidden';
             
             if (!isFilterOptionsLoaded) {
-                loadFilterOptions();
+                await loadFilterOptions();
             }
         }
     }
@@ -262,6 +414,132 @@ let isLoadingFiltered = false;
             filterSidebar.classList.remove('active');
             filterOverlay.classList.remove('active');
             document.body.style.overflow = '';
+        }
+    }
+
+    async function loadFilterOptions() {
+        const categoryLoading = document.getElementById('category-loading');
+        const brandLoading = document.getElementById('brand-loading');
+
+        try {
+            if (categoryLoading) {
+                categoryLoading.style.display = 'block';
+                categoryLoading.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading categories...';
+            }
+            if (brandLoading) {
+                brandLoading.style.display = 'block'; 
+                brandLoading.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading brands...';
+            }
+
+            let data;
+            try {
+                const response = await fetch(`${BASE_URL}/products/filter-options`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                data = await response.json();
+                
+            } catch (endpointError) {
+                data = await fallbackExtractFilters();
+            }
+            
+            allUniqueCategories = data.categories || [];
+            allUniqueBrands = data.brands || [];
+
+            await populateCategories();
+            await populateBrands();
+
+            isFilterOptionsLoaded = true;
+
+        } catch (error) {
+            console.error('All filter loading methods failed:', error);
+            showFilterLoadingError(categoryLoading, 'categories', error.message);
+            showFilterLoadingError(brandLoading, 'brands', error.message);
+        }
+    }
+
+    async function populateCategories() {
+        const categoryContainer = document.getElementById('category-options-container');
+        const categoryLoading = document.getElementById('category-loading');
+        
+        if (!categoryContainer) return;
+
+        try {
+            if (categoryLoading) categoryLoading.style.display = 'none';
+            
+            if (allUniqueCategories.length > 0) {
+                categoryContainer.innerHTML = allUniqueCategories.map(category => `
+                    <label class="category-option">
+                        <input type="checkbox" value="${category}">
+                        <span class="checkmark">${category}</span>
+                    </label>
+                `).join('');
+                categoryContainer.style.display = 'flex';
+            } else {
+                categoryContainer.innerHTML = '<div style="text-align: center; color: #666; font-size: 14px;">No categories found</div>';
+                categoryContainer.style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Error populating categories:', error);
+        }
+    }
+
+    async function populateBrands() {
+        const brandContainer = document.getElementById('brand-options-container');
+        const brandLoading = document.getElementById('brand-loading');
+        const brandSearchContainer = document.getElementById('brand-search-container');
+        
+        if (!brandContainer) return;
+
+        try {
+            if (brandLoading) brandLoading.style.display = 'none';
+            
+            if (allUniqueBrands.length > 0) {
+                brandContainer.innerHTML = allUniqueBrands.map(brand => `
+                    <label class="brand-option">
+                        <input type="checkbox" value="${brand}">
+                        <span class="checkmark">${brand}</span>
+                    </label>
+                `).join('');
+                brandContainer.style.display = 'flex';
+                if (brandSearchContainer) brandSearchContainer.style.display = 'block';
+            } else {
+                brandContainer.innerHTML = '<div style="text-align: center; color: #666; font-size: 14px;">No brands found</div>';
+                brandContainer.style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Error populating brands:', error);
+        }
+    }
+
+    function filterBrandsInSidebar(searchTerm) {
+        const brandOptions = document.querySelectorAll('.brand-option');
+        const term = searchTerm.toLowerCase();
+        
+        brandOptions.forEach(option => {
+            const brandName = option.textContent.toLowerCase();
+            if (brandName.includes(term)) {
+                option.style.display = 'flex';
+            } else {
+                option.style.display = 'none';
+            }
+        });
+    }
+
+    function showFilterLoadingError(loadingElement, type, errorMessage = 'Unknown error') {
+        if (loadingElement) {
+            loadingElement.innerHTML = `
+                <div class="filter-loading-error">
+                    <div>Failed to load ${type}</div>
+                    <small>${errorMessage}</small>
+                    <div style="margin-top: 5px;">
+                        <button class="filter-retry-btn" onclick="window.retryLoadFilterOptions()">Retry</button>
+                        <button class="filter-debug-btn" onclick="window.debugTestEndpoints().then(console.log)">Debug</button>
+                    </div>
+                </div>
+            `;
         }
     }
 
@@ -281,19 +559,70 @@ let isLoadingFiltered = false;
         updateSearchIndicator();
     }
 
-    function hasActiveFilters() {
-        return currentFilters.search || 
-               currentFilters.price || 
-               currentFilters.stock.length > 0 || 
-               currentFilters.brands.length > 0 || 
-               currentFilters.categories.length > 0;
-    }
+    async function performSearch() {
+        window.isFilterSystemActive = true;
+        
+        const searchInput = document.getElementById('product-search-input');
+        const query = searchInput?.value?.trim() || '';
+        currentSearchQuery = query;
+        
+        updateFilterState();
+        
+        if (!query) {
+            applyFiltersFromSidebar();
+            return;
+        }
 
-    function hasActiveNonSearchFilters() {
-        return currentFilters.price || 
-               currentFilters.stock.length > 0 || 
-               currentFilters.brands.length > 0 || 
-               currentFilters.categories.length > 0;
+        currentFilteredPage = 1;
+        hasMoreFilteredPages = true;
+        
+        try {
+            updateResultsDisplay(0, query, false, true);
+            
+            let response, endpoint;
+            const params = buildFilterParams(1, 12);
+            
+            try {
+                endpoint = `${BASE_URL}/products/filtered?${params.toString()}`;
+                response = await fetch(endpoint);
+            } catch (filteredError) {
+                endpoint = `${BASE_URL}/search?q=${encodeURIComponent(query)}&per_page=12`;
+                response = await fetch(endpoint);
+            }
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const results = data.products || [];
+
+            updateGlobalProductArrays(results);
+
+            if (window.displayProductsInGrid) {
+                window.displayProductsInGrid(results);
+            }
+            
+            hasMoreFilteredPages = data.has_next || false;
+            window.hasMoreFilteredPages = hasMoreFilteredPages;
+
+            window.searchResults = results;
+            window.currentSearchQuery = query;
+
+            if (window.onSearchComplete) {
+                window.onSearchComplete(results, query);
+            }
+
+            const hasActiveFilters = hasActiveNonSearchFilters();
+            updateResultsDisplay(results.length, query, hasActiveFilters);
+            closeFilterSidebar();
+
+        } catch (error) {
+            console.error('Search error:', error);
+            updateResultsDisplay(0, query, false, false, 'Search failed. Please try again.');
+        }
+
+        updateSearchIndicator();
     }
 
     function updateFilterState() {
@@ -309,6 +638,186 @@ let isLoadingFiltered = false;
             brands: brandFilters.map(cb => cb.value),
             categories: categoryFilters.map(cb => cb.value)
         };
+    }
+
+    function hasActiveNonSearchFilters() {
+        return currentFilters.price || 
+               currentFilters.stock.length > 0 || 
+               currentFilters.brands.length > 0 || 
+               currentFilters.categories.length > 0;
+    }
+
+    async function applyFiltersFromSidebar() {
+        updateFilterState();
+        
+        currentFilteredPage = 1;
+        hasMoreFilteredPages = true;
+        
+        try {
+            const hasAnyFilters = hasActiveFilters();
+            
+            if (!hasAnyFilters) {
+                window.isFilterSystemActive = false;
+                
+                window.searchResults = null;
+                window.currentSearchQuery = '';
+                
+                if (window.onSearchClear) {
+                    window.onSearchClear();
+                }
+                
+                updateResultsDisplay(0, '', false, false);
+                closeFilterSidebar();
+                return;
+            }
+            
+            window.isFilterSystemActive = true;
+            
+            updateResultsDisplay(0, currentFilters.search, hasActiveNonSearchFilters(), true);
+            
+            let response, data;
+            const params = buildFilterParams(1, 12);
+            
+            try {
+                response = await fetch(`${BASE_URL}/products/filtered?${params.toString()}`);
+                if (!response.ok) throw new Error(`Filtered endpoint failed: ${response.status}`);
+                data = await response.json();
+            } catch (filteredError) {
+                if (currentFilters.search) {
+                    response = await fetch(`${BASE_URL}/search?q=${encodeURIComponent(currentFilters.search)}&per_page=50`);
+                } else {
+                    response = await fetch(`${BASE_URL}/products?per_page=50`);
+                }
+                
+                if (!response.ok) throw new Error(`Fallback endpoint failed: ${response.status}`);
+                data = await response.json();
+                
+                data.products = applyClientSideFilters(data.products || []);
+                data.has_next = false;
+            }
+            
+            const filteredProducts = data.products || [];
+            
+            updateGlobalProductArrays(filteredProducts);
+
+            if (window.displayProductsInGrid) {
+                window.displayProductsInGrid(filteredProducts);
+            }
+
+            hasMoreFilteredPages = data.has_next || false;
+            window.hasMoreFilteredPages = hasMoreFilteredPages;
+            
+            if (currentFilters.search) {
+                window.searchResults = filteredProducts;
+                window.currentSearchQuery = currentFilters.search;
+                
+                if (window.onSearchComplete) {
+                    window.onSearchComplete(filteredProducts, currentFilters.search);
+                }
+            } else {
+                window.searchResults = null;
+                window.currentSearchQuery = '';
+            }
+            
+            updateResultsDisplay(filteredProducts.length, currentFilters.search, hasActiveNonSearchFilters());
+            updateFilterUI();
+            closeFilterSidebar();
+            
+        } catch (error) {
+            console.error('Error applying filters:', error);
+            updateResultsDisplay(0, currentFilters.search, false, false, 'Failed to apply filters. Please try again.');
+        }
+        updateSearchIndicator();
+    }
+
+    function applyClientSideFilters(products) {
+        let filtered = [...products];
+        
+        if (currentFilters.price) {
+            filtered = filtered.filter(product => {
+                const price = product.offer_price || product.mrp || 0;
+                
+                switch (currentFilters.price) {
+                    case 'under-1000': return price < 1000;
+                    case '1000-3000': return price >= 1000 && price <= 3000;
+                    case '3000-5000': return price >= 3000 && price <= 5000;
+                    case 'above-5000': return price > 5000;
+                    default: return true;
+                }
+            });
+        }
+
+        if (currentFilters.stock.length > 0) {
+            filtered = filtered.filter(product => {
+                const stockNumber = product.stock_number || 0;
+                return currentFilters.stock.some(stockType => {
+                    switch (stockType) {
+                        case 'in-stock': return stockNumber > 5;
+                        case 'low-stock': return stockNumber > 0 && stockNumber <= 5;
+                        default: return true;
+                    }
+                });
+            });
+        }
+
+        if (currentFilters.brands.length > 0) {
+            filtered = filtered.filter(product => {
+                const productName = (product.product_name || '').toLowerCase();
+                const manufacturer = (product.manufacturer || '').toLowerCase();
+                
+                return currentFilters.brands.some(brand => {
+                    const brandLower = brand.toLowerCase();
+                    return productName.includes(brandLower) || manufacturer.includes(brandLower);
+                });
+            });
+        }
+
+        if (currentFilters.categories.length > 0) {
+            filtered = filtered.filter(product => {
+                return currentFilters.categories.includes(product.category);
+            });
+        }
+        
+        return filtered;
+    }
+
+    function clearAllFiltersFromSidebar() {
+        window.isFilterSystemActive = false;
+        
+        document.querySelectorAll('input[name="price"]').forEach(input => input.checked = false);
+        document.querySelectorAll('input[name="stock"]').forEach(input => input.checked = false);
+        document.querySelectorAll('.brand-option input').forEach(input => input.checked = false);
+        document.querySelectorAll('.category-option input').forEach(input => input.checked = false);
+        
+        clearSearchInput();
+        
+        currentFilters = {
+            search: '',
+            price: '',
+            stock: [],
+            brands: [],
+            categories: []
+        };
+        
+        currentFilteredPage = 1;
+        hasMoreFilteredPages = true;
+
+        const brandSearch = document.getElementById('brand-search');
+        if (brandSearch) {
+            brandSearch.value = '';
+            filterBrandsInSidebar('');
+        }
+
+        window.searchResults = null;
+        window.currentSearchQuery = '';
+        
+        if (window.onSearchClear) {
+            window.onSearchClear();
+        }
+        
+        updateFilterUI();
+        closeFilterSidebar();
+        updateSearchIndicator();
     }
 
     function updateFilterUI() {
@@ -358,210 +867,38 @@ let isLoadingFiltered = false;
         resultDisplay.textContent = displayText;
     }
 
-    // Simplified versions of other functions
-    async function performSearch() {
-        window.isFilterSystemActive = true;
-        const searchInput = document.getElementById('product-search-input');
-        const query = searchInput?.value?.trim() || '';
-        currentSearchQuery = query;
-        updateFilterState();
-        
-        if (!query) {
-            applyFiltersFromSidebar();
-            return;
-        }
-        
-        // Basic search implementation
-        try {
-            const response = await fetch(`${BASE_URL}/search?q=${encodeURIComponent(query)}&per_page=12`);
-            if (response.ok) {
-                const data = await response.json();
-                const results = data.products || [];
-                updateGlobalProductArrays(results);
-                if (window.displayProductsInGrid) {
-                    window.displayProductsInGrid(results);
-                }
-                window.searchResults = results;
-                window.currentSearchQuery = query;
-                if (window.onSearchComplete) {
-                    window.onSearchComplete(results, query);
-                }
-                updateResultsDisplay(results.length, query, false);
-            }
-        } catch (error) {
-            console.error('Search error:', error);
-        }
-        updateSearchIndicator();
-    }
-
-    async function applyFiltersFromSidebar() {
-        updateFilterState();
-        const hasAnyFilters = hasActiveFilters();
-        
-        if (!hasAnyFilters) {
-            window.isFilterSystemActive = false;
-            window.searchResults = null;
-            window.currentSearchQuery = '';
-            if (window.onSearchClear) {
-                window.onSearchClear();
-            }
-            closeFilterSidebar();
-            return;
-        }
-        // Simplified filter application
-        closeFilterSidebar();
-        updateSearchIndicator();
-    }
-
-    function clearAllFiltersFromSidebar() {
-        window.isFilterSystemActive = false;
-        document.querySelectorAll('input[name="price"]').forEach(input => input.checked = false);
-        document.querySelectorAll('input[name="stock"]').forEach(input => input.checked = false);
-        document.querySelectorAll('.brand-option input').forEach(input => input.checked = false);
-        document.querySelectorAll('.category-option input').forEach(input => input.checked = false);
-        
-        clearSearchInput();
-        currentFilters = {
-            search: '',
-            price: '',
-            stock: [],
-            brands: [],
-            categories: []
-        };
-        
-        window.searchResults = null;
-        window.currentSearchQuery = '';
-        
-        if (window.onSearchClear) {
-            window.onSearchClear();
-        }
-        
-        updateFilterUI();
-        closeFilterSidebar();
-        updateSearchIndicator();
-    }
-
-    // Simplified setup functions
-    function setupEventListeners() {
-        const filterButton = document.getElementById('product-filter-search');
-        if (filterButton) {
-            filterButton.addEventListener('click', openFilterSidebar);
-        }
-
-        document.getElementById('close-filter-sidebar')?.addEventListener('click', closeFilterSidebar);
-        filterOverlay?.addEventListener('click', closeFilterSidebar);
-
-        const searchInput = document.getElementById('product-search-input');
-        const searchBtn = document.getElementById('search-products-btn');
-        const clearSearchBtn = document.getElementById('clear-search-btn');
-        
-        if (searchInput && searchBtn) {
-            searchBtn.addEventListener('click', performSearch);
-            searchInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    performSearch();
-                }
-            });
-            
-            searchInput.addEventListener('input', function(e) {
-                const hasValue = e.target.value.trim().length > 0;
-                if (clearSearchBtn) {
-                    clearSearchBtn.style.display = hasValue ? 'flex' : 'none';
-                }
-                setTimeout(updateSearchIndicator, 100);
-            });
-        }
-        
-        if (clearSearchBtn) {
-            clearSearchBtn.addEventListener('click', clearSearchInput);
-        }
-
-        document.getElementById('apply-filters-btn')?.addEventListener('click', applyFiltersFromSidebar);
-        document.getElementById('clear-filters-btn')?.addEventListener('click', clearAllFiltersFromSidebar);
-
-        document.addEventListener('change', function(e) {
-            if (e.target.matches('input[name="price"]') || 
-                e.target.matches('input[name="stock"]') || 
-                e.target.matches('.brand-option input') ||
-                e.target.matches('.category-option input')) {
-                updateFilterState();
-                updateFilterUI();
-                setTimeout(updateSearchIndicator, 100);
-            }
-        });
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && filterSidebar?.classList.contains('active')) {
-                closeFilterSidebar();
-            }
-        });
-        
-        console.log('Event listeners attached');
-    }
-
-    function initializeFilterSystem() {
-        filterSidebar = document.getElementById('filter-sidebar');
-        filterOverlay = document.getElementById('filter-sidebar-overlay');
-        
-        if (!filterSidebar || !filterOverlay) {
-            console.error('Filter sidebar elements not found');
-            return;
-        }
-
-        setupEventListeners(); 
-        setupFilteredInfiniteScroll();
-        setTimeout(updateSearchIndicator, 500);
-        
-        console.log('Filter system initialized');
-    }
-
-    // Stub functions to prevent errors
-    async function loadFilterOptions() {}
-    async function populateCategories() {}
-    async function populateBrands() {}
-    function filterBrandsInSidebar() {}
-    function showFilterLoadingError() {}
-    async function fallbackExtractFilters() { return { categories: [], brands: [] }; }
-    async function debugTestEndpoints() {}
-    function applyClientSideFilters(products) { return products; }
-
-    // Export functions to global scope - NO CALLS HERE
+    // Export all functions to window - NO FUNCTION CALLS HERE
     window.openFilterSidebar = openFilterSidebar;
     window.closeFilterSidebar = closeFilterSidebar;
     window.updateSearchIndicator = updateSearchIndicator;
     window.setupFilteredInfiniteScroll = setupFilteredInfiniteScroll;
-    window.initializeFilterSystem = initializeFilterSystem;
-    
-    // Debug functions
+
     window.retryLoadFilterOptions = function() {
-        console.log('Retrying filter options...');
+        isFilterOptionsLoaded = false;
         loadFilterOptions();
     };
+
     window.debugTestEndpoints = debugTestEndpoints;
+    
     window.filterDebugInfo = {
         getCurrentFilters: () => currentFilters,
-        getFilterState: () => ({ isLoaded: isFilterOptionsLoaded })
+        getAllCategories: () => allUniqueCategories,
+        getAllBrands: () => allUniqueBrands,
+        getFilterState: () => ({
+            isLoaded: isFilterOptionsLoaded,
+            hasFilters: hasActiveFilters(),
+            categories: allUniqueCategories.length,
+            brands: allUniqueBrands.length
+        })
     };
 
-    console.log('Filter system functions exported');
+    console.log('🔍 Filter system functions exported');
 
-})(); // END OF IIFE - Functions are now available
-
-// STEP 2: Initialize OUTSIDE the IIFE after a delay
-setTimeout(function() {
-    console.log('Starting filter system initialization...');
-    
-    function doInitialization() {
-        if (typeof window.initializeFilterSystem === 'function') {
-            window.initializeFilterSystem();
-        } else {
-            console.error('initializeFilterSystem not available');
-        }
-    }
-    
+    // Initialize after all functions are defined and exported
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', doInitialization);
+        document.addEventListener('DOMContentLoaded', initializeFilterSystem);
     } else {
-        doInitialization();
+        setTimeout(initializeFilterSystem, 100);
     }
-}, 100); // Give the IIFE time to complete
+
+})();
