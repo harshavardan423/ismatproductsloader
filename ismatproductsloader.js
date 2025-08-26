@@ -16,10 +16,16 @@ let hasMoreProducts = true;
 let currentModalProduct = null;
 let selectedVariant = null;
 
-// Store original and filtered products
+// Store original and filtered products - FIXED: Use window globals consistently
 let originalProducts = [];
 let filteredProducts = [];
-let allProducts = [];
+
+// FIXED: Make allProducts always reference the global window version
+Object.defineProperty(window, 'allProducts', {
+    get: function() { return window._allProducts || []; },
+    set: function(value) { window._allProducts = value; }
+});
+let allProducts = window.allProducts;
 
 // Modal history management
 let modalHistoryState = null;
@@ -433,7 +439,7 @@ function applyFilters() {
     
     // Update filteredProducts and display
     filteredProducts = filtered;
-    allProducts = filtered;
+    window.allProducts = filtered;
     displayProductsInGrid(filtered);
     
     // Update results display text
@@ -1135,16 +1141,24 @@ function displayProductsInGrid(products) {
         productsGrid.innerHTML = productCards;
     }
     
-    // Only attach event listeners once
-    if (!mainEventListenerAttached) {
-        attachEventListeners();
-        mainEventListenerAttached = true;
-    }
+    // FIXED: Always ensure event listeners are attached for new content
+    ensureEventListenersAttached();
     
     if (window.isSearchMode && window.isSearchMode() && endIndicator) {
         endIndicator.style.display = 'block';
         endIndicator.innerHTML = '<p>End of search results</p>';
     }
+}
+
+// FIXED: New function to ensure event listeners are always attached
+function ensureEventListenersAttached() {
+    // Remove any existing listeners to prevent duplicates
+    document.removeEventListener('click', handleProductCardClick);
+    
+    // Attach fresh event listener
+    document.addEventListener('click', handleProductCardClick);
+    
+    console.log('Event listeners attached/refreshed for product cards');
 }
 
 // Infinite Scroll Implementation
@@ -1158,7 +1172,7 @@ async function loadProducts(page = 1, append = false, isSearchMode = false) {
     if (isSearchMode && window.searchResults) {
         displayProductsInGrid(window.searchResults);
         originalProducts = window.searchResults;
-        allProducts = window.searchResults;
+        window.allProducts = window.searchResults;
         return;
     }
     
@@ -1200,16 +1214,16 @@ async function loadProducts(page = 1, append = false, isSearchMode = false) {
         
         if (append) {
             originalProducts = [...originalProducts, ...products];
-            allProducts = [...allProducts, ...products];
+            window.allProducts = [...window.allProducts, ...products];
         } else {
             originalProducts = products;
-            allProducts = products;
+            window.allProducts = products;
         }
         
         if (page === 1 && !append) {
             applyFilters();
         } else {
-            displayProductsInGrid(allProducts);
+            displayProductsInGrid(window.allProducts);
         }
         
         if (loadingIndicator) loadingIndicator.style.display = 'none';
@@ -1322,12 +1336,13 @@ function handleModalQuoteClick(e) {
     }
 }
 
-// FIXED: Single event listener attachment to prevent multiple listeners
+// FIXED: Enhanced event listener attachment that works with dynamic content
 function attachEventListeners() {
     // Use event delegation with a single listener on document
-    document.addEventListener('click', handleProductCardClick);
+    ensureEventListenersAttached();
 }
 
+// FIXED: Enhanced click handler that works with dynamically loaded products
 function handleProductCardClick(e) {
     // Prevent processing if already processing a click
     if (isProcessingClick) {
@@ -1343,8 +1358,14 @@ function handleProductCardClick(e) {
     const productId = parseInt(card.getAttribute('data-product-id'));
     if (!productId) return;
     
-    const product = allProducts.find(p => p.id === productId);
-    if (!product) return;
+    // FIXED: Always get fresh product array from window global
+    const currentProducts = window.allProducts || [];
+    const product = currentProducts.find(p => p.id === productId);
+    
+    if (!product) {
+        console.warn(`Product with ID ${productId} not found in current product array`, currentProducts);
+        return;
+    }
     
     // Handle view details button
     if (target.classList.contains('view-details-button') || 
@@ -1409,6 +1430,9 @@ function refreshDisplay() {
         updateModalCartButton();
         updateModalQuoteButton();
     }
+    
+    // FIXED: Ensure event listeners are attached after any display refresh
+    ensureEventListenersAttached();
 }
 
 // ===============================
@@ -1422,7 +1446,7 @@ window.onSearchComplete = function(results, query) {
     window.isFilterSystemActive = true;
     
     originalProducts = results;
-    allProducts = results;
+    window.allProducts = results;
     filteredProducts = results;
     
     // Store search state
@@ -1630,11 +1654,13 @@ window.getQuotationQuantity = getQuotationQuantity;
 window.updateModalCartButton = updateModalCartButton;
 window.updateModalQuoteButton = updateModalQuoteButton;
 window.updateResultsDisplayText = updateResultsDisplayText;
+window.createProductCard = createProductCard; // FIXED: Export this function
+window.ensureEventListenersAttached = ensureEventListenersAttached; // FIXED: Export this too
 
 // Make accessors available
 window.currentModalProduct = () => currentModalProduct;
 window.selectedVariant = () => selectedVariant;
-window.allProducts = () => allProducts;
+// FIXED: Don't export allProducts as a function since filterSystem.js expects it as a property
 
 // ===============================
 // INITIALIZATION
@@ -1734,5 +1760,3 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Error during initialization:', error);
     }
 });
-
-
