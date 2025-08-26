@@ -1256,28 +1256,27 @@ function setupInfiniteScroll() {
     let ticking = false;
     
     function checkScrollPosition() {
-        // IMMEDIATE CHECK - if filter system is active, don't proceed
-        if (window.isFilterSystemActive) {
+        // Simple check - if search results exist, don't load more
+        if (window.searchResults) {
             ticking = false;
             return;
         }
         
-        // Check if any filters or search are active - if so, don't load more products
+        // Check for any active filters
         const searchInput = document.getElementById('product-search-input');
-        const hasSearchText = searchInput && searchInput.value.trim();
-        const hasSearchResults = window.searchResults && window.searchResults.length >= 0;
-        const hasPriceFilter = document.querySelector('input[name="price"]:checked');
-        const hasStockFilter = document.querySelectorAll('input[name="stock"]:checked').length > 0;
-        const hasBrandFilter = document.querySelectorAll('.brand-option input:checked').length > 0;
-        const hasCategoryFilter = document.querySelectorAll('.category-option input:checked').length > 0;
-        
-        // If ANY filter is active, don't load more products
-        if (hasSearchText || hasSearchResults || hasPriceFilter || hasStockFilter || hasBrandFilter || hasCategoryFilter) {
+        if (searchInput && searchInput.value.trim()) {
             ticking = false;
             return;
         }
         
-        // Original infinite scroll logic
+        if (document.querySelector('input[name="price"]:checked') ||
+            document.querySelectorAll('input[name="stock"]:checked').length > 0 ||
+            document.querySelectorAll('.brand-option input:checked').length > 0 ||
+            document.querySelectorAll('.category-option input:checked').length > 0) {
+            ticking = false;
+            return;
+        }
+        
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
         const windowHeight = window.innerHeight;
         const documentHeight = document.documentElement.scrollHeight;
@@ -1735,5 +1734,6 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Error during initialization:', error);
     }
 });
+
 
 
