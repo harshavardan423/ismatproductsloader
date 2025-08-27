@@ -282,65 +282,59 @@
     // ===============================
 
     // Function to add item to quotation with debouncing
-    function addToQuotation(product) {
-        if (!product || isProcessingClick) return 0;
-        
-        isProcessingClick = true;
-        
-        // Add a small delay to prevent rapid multiple clicks
-        setTimeout(() => {
-            isProcessingClick = false;
-        }, 500);
-        
-        const existingItem = window.quotationItems.find(item => 
-            item.id === product.id && 
-            (item.selectedVariant?.name || null) === (selectedVariant?.name || null)
-        );
-        
-        if (existingItem) {
-            existingItem.quantity += 1;
-            
-            if (window.updateQuotationButton) {
-                window.updateQuotationButton();
-            }
-            
-            return existingItem.quantity;
-        }
-        
-        const price = product.offer_price || product.mrp || 0;
-        const finalPrice = selectedVariant ? (selectedVariant.price || price) : price;
-        
-        const newItem = {
-            id: product.id,
-            name: product.product_name,
-            price: parseFloat(finalPrice),
-            image: getImageUrl(product.product_image_urls && product.product_image_urls[0]),
-            category: product.category,
-            quantity: 1,
-            selectedVariant: selectedVariant ? {
-                name: selectedVariant.name,
-                price: selectedVariant.price,
-                sku: selectedVariant.sku || product.sku
-            } : null
-        };
-        
-        window.quotationItems.push(newItem);
+function addToQuotation(product) {
+    if (!product || isProcessingClick) return 0;
+    
+    isProcessingClick = true;
+    
+    // Add a small delay to prevent rapid multiple clicks
+    setTimeout(() => {
+        isProcessingClick = false;
+    }, 500);
+    
+    const existingItem = window.quotationItems.find(item => 
+        item.id === product.id && 
+        (item.selectedVariant?.name || null) === (selectedVariant?.name || null)
+    );
+    
+    if (existingItem) {
+        existingItem.quantity += 1;
         
         if (window.updateQuotationButton) {
             window.updateQuotationButton();
         }
         
-        // Generate WhatsApp message
-        const variantText = selectedVariant ? ` (${selectedVariant.name})` : '';
-        const message = `Hi, I'm interested in ${product.product_name}${variantText}`;
-        const whatsappNumber = product.whatsapp_number || '917738096075';
-        const whatsappUrl = `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
-        
-        // Open WhatsApp in new tab
-        window.open(whatsappUrl, '_blank');
-        
-        return 1;
+        return existingItem.quantity;
     }
+    
+    const price = product.offer_price || product.mrp || 0;
+    const finalPrice = selectedVariant ? (selectedVariant.price || price) : price;
+    
+    const newItem = {
+        id: product.id,
+        name: product.product_name,
+        price: parseFloat(finalPrice),
+        image: getImageUrl(product.product_image_urls && product.product_image_urls[0]),
+        category: product.category,
+        quantity: 1,
+        selectedVariant: selectedVariant ? {
+            name: selectedVariant.name,
+            price: selectedVariant.price,
+            sku: selectedVariant.sku || product.sku
+        } : null
+    };
+    
+    window.quotationItems.push(newItem);
+    
+    if (window.updateQuotationButton) {
+        window.updateQuotationButton();
+    }
+    
+    // REMOVED WhatsApp auto-opening code
+    // WhatsApp will only open when user clicks "Request All Quotes" button
+    
+    return 1;
+}
 
     // Function to check if item is in quotation
     function isInQuotation(productId, variantId = null) {
