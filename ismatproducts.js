@@ -1,5 +1,5 @@
 // ===============================
-// COMBINED PRODUCTS & FILTER SYSTEM - FIXED QUOTE BUTTON
+// COMBINED PRODUCTS & FILTER SYSTEM
 // ===============================
 
 (function() {
@@ -186,11 +186,6 @@
         console.log(`Updated global product arrays with ${products.length} products`);
     }
 
-    // Function to get quotation items count
-    function getQuotationItemsCount() {
-        return window.quotationItems.reduce((total, item) => total + item.quantity, 0);
-    }
-
     // ===============================
     // CART MANAGEMENT FUNCTIONS
     // ===============================
@@ -283,10 +278,10 @@
     }
 
     // ===============================
-    // QUOTATION MANAGEMENT FUNCTIONS - FIXED
+    // QUOTATION MANAGEMENT FUNCTIONS
     // ===============================
 
-    // FIXED: Function to add item to quotation - NO AUTO WHATSAPP
+    // Function to add item to quotation with debouncing
     function addToQuotation(product) {
         if (!product || isProcessingClick) return 0;
         
@@ -304,8 +299,11 @@
         
         if (existingItem) {
             existingItem.quantity += 1;
-            updateQuotationButton();
-            console.log('Item quantity increased in quotation - NO WhatsApp opened');
+            
+            if (window.updateQuotationButton) {
+                window.updateQuotationButton();
+            }
+            
             return existingItem.quantity;
         }
         
@@ -327,10 +325,20 @@
         };
         
         window.quotationItems.push(newItem);
-        updateQuotationButton();
         
-        // ABSOLUTELY NO WHATSAPP OPENING - EVER!
-        console.log('Item added to quotation successfully - NO WhatsApp opened');
+        if (window.updateQuotationButton) {
+            window.updateQuotationButton();
+        }
+        
+        // Generate WhatsApp message
+        const variantText = selectedVariant ? ` (${selectedVariant.name})` : '';
+        const message = `Hi, I'm interested in ${product.product_name}${variantText}`;
+        const whatsappNumber = product.whatsapp_number || '917738096075';
+        const whatsappUrl = `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
+        
+        // Open WhatsApp in new tab
+        window.open(whatsappUrl, '_blank');
+        
         return 1;
     }
 
@@ -351,439 +359,16 @@
         return item ? item.quantity : 0;
     }
 
-    // Function to update quotation button
-    function updateQuotationButton() {
-        const quotationButton = document.getElementById('quotation-cart-button');
-        if (quotationButton) {
-            const count = getQuotationItemsCount();
-            
-            // Remove existing badge if any
-            const existingBadge = quotationButton.querySelector('.quotation-badge');
-            if (existingBadge) {
-                existingBadge.remove();
-            }
-            
-            // Set data attribute for CSS styling
-            quotationButton.setAttribute('data-count', count);
-            
-            // Update button text if it has a .quotation-text element
-            const quotationText = quotationButton.querySelector('.quotation-text');
-            if (quotationText) {
-                quotationText.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
-            } else {
-                // If no .quotation-text element, update the button text directly (if it's just text)
-                if (quotationButton.childNodes.length === 1 && quotationButton.childNodes[0].nodeType === 3) {
-                    quotationButton.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
-                }
-            }
-            
-            // Add visual badge if count > 0
-            if (count > 0) {
-                const badge = document.createElement('span');
-                badge.className = 'quotation-badge';
-                badge.textContent = count;
-                badge.style.cssText = `
-                    position: absolute;
-                    top: -8px;
-                    right: -8px;
-                    background: #28a745;
-                    color: white;
-                    border-radius: 50%;
-                    width: 20px;
-                    height: 20px;
-                    font-size: 12px;
-                    font-weight: bold;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 10;
-                    animation: quotationBadgePulse 0.3s ease-out;
-                `;
-                
-                // Make sure quotation button has relative positioning
-                const currentPosition = window.getComputedStyle(quotationButton).position;
-                if (currentPosition === 'static') {
-                    quotationButton.style.position = 'relative';
-                }
-                
-                quotationButton.appendChild(badge);
-            }
-        }
-    }
-
-    // Function to show quotation cart
-    function showQuotationCart() {
-        const quotationCart = document.createElement('div');
-        quotationCart.className = 'quotation-sidebar';
-        
-        const quotationItemsHTML = window.quotationItems.length > 0 ? 
-            window.quotationItems.map(item => `
-                <div class="quotation-item" data-product-id="${item.id}">
-                    <img src="${item.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0zMCAyMFY0ME0yMCAzMEg0MCIgc3Ryb2tlPSIjQ0NDQ0NDIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4='}" alt="${item.name}" class="quotation-item-image">
-                    <div class="quotation-item-details">
-                        <h4>${item.name}</h4>
-                        ${item.selectedVariant ? `<p class="variant-info">Variant: ${item.selectedVariant.name}</p>` : ''}
-                        <div class="quantity-controls">
-                            <button class="quantity-btn minus" data-product-id="${item.id}" ${item.quantity <= 1 ? 'disabled' : ''}>-</button>
-                            <span class="quantity">${item.quantity}</span>
-                            <button class="quantity-btn plus" data-product-id="${item.id}">+</button>
-                            <button class="remove-item" data-product-id="${item.id}">Remove</button>
-                        </div>
-                    </div>
-                </div>
-            `).join('') : 
-            '<div class="empty-quotation">Your quotation list is empty</div>';
-
-        quotationCart.innerHTML = `
-            <div class="quotation-header">
-                <h2>Quotation Cart (${getQuotationItemsCount()} items)</h2>
-                <button class="close-quotation">&times;</button>
-            </div>
-            <div class="quotation-items">
-                ${quotationItemsHTML}
-            </div>
-            <div class="quotation-footer">
-                <button class="request-all-quotes" ${window.quotationItems.length === 0 ? 'disabled' : ''}>Request All Quotes via WhatsApp</button>
-            </div>
-        `;
-
-        // Add quotation cart styles
-        const quotationStyles = document.createElement('style');
-        quotationStyles.id = 'quotation-cart-styles';
-        quotationStyles.textContent = `
-            .quotation-sidebar {
-                position: fixed;
-                top: 0;
-                right: -400px;
-                width: 400px;
-                height: 100%;
-                background: white;
-                box-shadow: -2px 0 5px rgba(0,0,0,0.1);
-                transition: right 0.3s ease;
-                z-index: 1000;
-                box-sizing: border-box;
-                display: flex;
-                flex-direction: column;
-                border-left: 3px solid #28a745;
-            }
-            .quotation-sidebar.active { right: 0; }
-            .quotation-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                border-bottom: 1px solid #eee;
-                padding: 20px;
-                margin-bottom: 20px;
-            }
-            .quotation-header h2 {
-                margin: 0;
-                font-size: 18px;
-                color: #28a745;
-            }
-            .close-quotation {
-                background: none;
-                border: none;
-                font-size: 24px;
-                cursor: pointer;
-                color: #666;
-                width: 30px;
-                height: 30px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                border-radius: 50%;
-                transition: background-color 0.2s;
-            }
-            .close-quotation:hover { background: #f0f0f0; }
-            .quotation-items {
-                flex: 1;
-                overflow-y: auto;
-                margin-bottom: 20px;
-            }
-            .quotation-item {
-                display: flex;
-                align-items: flex-start;
-                gap: 15px;
-                margin-bottom: 20px;
-                border-bottom: 1px solid #eee;
-                padding-bottom: 15px;
-                padding: 20px;
-            }
-            .quotation-item:last-child { border-bottom: none; }
-            .quotation-item-image {
-                width: 60px;
-                height: 60px;
-                object-fit: cover;
-                border-radius: 8px;
-                flex-shrink: 0;
-            }
-            .quotation-item-details { flex: 1; }
-            .quotation-item h4 {
-                margin: 0 0 5px 0;
-                font-size: 16px;
-                line-height: 1.3;
-                color: #333;
-            }
-            .quotation-item .variant-info {
-                margin: 0 0 5px 0;
-                font-size: 13px;
-                color: #666;
-                font-style: italic;
-            }
-            .quantity-controls {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                margin-top: 10px;
-            }
-            .quantity-btn {
-                width: 30px;
-                height: 30px;
-                border: 1px solid #ddd;
-                background: white;
-                cursor: pointer;
-                border-radius: 4px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 14px;
-                transition: all 0.2s;
-            }
-            .quantity-btn:hover {
-                background: #f0f0f0;
-                border-color: #28a745;
-            }
-            .quantity-btn:disabled {
-                opacity: 0.5;
-                cursor: not-allowed;
-            }
-            .quantity {
-                font-weight: bold;
-                min-width: 30px;
-                text-align: center;
-                padding: 5px;
-            }
-            .remove-item {
-                background: #dc2626;
-                color: white;
-                border: none;
-                padding: 5px 10px;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 12px;
-                transition: background-color 0.2s;
-            }
-            .remove-item:hover { background: #b91c1c; }
-            .empty-quotation {
-                text-align: center;
-                color: #666;
-                font-style: italic;
-                padding: 40px 20px;
-            }
-            .quotation-footer {
-                border-top: 1px solid #eee;
-                padding: 20px;
-            }
-            .request-all-quotes {
-                width: 100%;
-                padding: 15px;
-                background: #25d366;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 16px;
-                font-weight: 500;
-                transition: background-color 0.2s;
-            }
-            .request-all-quotes:hover:not(:disabled) { background: #128c7e; }
-            .request-all-quotes:disabled {
-                background: #6c757d;
-                cursor: not-allowed;
-            }
-            
-            @media (max-width: 480px) {
-                .quotation-sidebar {
-                    width: 100%;
-                    right: -100%;
-                }
-                .quotation-item {
-                    flex-direction: column;
-                    align-items: flex-start;
-                }
-                .quotation-item-image { align-self: start; }
-                .quantity-controls { justify-content: start; }
-            }
-        `;
-
-        document.head.appendChild(quotationStyles);
-        document.body.appendChild(quotationCart);
-
-        // Add overlay
-        const overlay = document.createElement('div');
-        overlay.className = 'quotation-overlay';
-        overlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s ease;
-            z-index: 999;
-        `;
-        document.body.appendChild(overlay);
-
-        // Show quotation cart and overlay
-        setTimeout(() => {
-            quotationCart.classList.add('active');
-            overlay.style.opacity = '1';
-            overlay.style.visibility = 'visible';
-            document.body.style.overflow = 'hidden';
-        }, 10);
-
-        // Function to update quotation display
-        function updateQuotationDisplay() {
-            const quotationItemsContainer = quotationCart.querySelector('.quotation-items');
-            const requestButton = quotationCart.querySelector('.request-all-quotes');
-            const quotationHeader = quotationCart.querySelector('.quotation-header h2');
-
-            const quotationItemsHTML = window.quotationItems.length > 0 ? 
-                window.quotationItems.map(item => `
-                    <div class="quotation-item" data-product-id="${item.id}">
-                        <img src="${item.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0zMCAyMFY0ME0yMCAzMEg0MCIgc3Ryb2tlPSIjQ0NDQ0NDIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4='}" alt="${item.name}" class="quotation-item-image">
-                        <div class="quotation-item-details">
-                            <h4>${item.name}</h4>
-                            ${item.selectedVariant ? `<p class="variant-info">Variant: ${item.selectedVariant.name}</p>` : ''}
-                            <div class="quantity-controls">
-                                <button class="quantity-btn minus" data-product-id="${item.id}" ${item.quantity <= 1 ? 'disabled' : ''}>-</button>
-                                <span class="quantity">${item.quantity}</span>
-                                <button class="quantity-btn plus" data-product-id="${item.id}">+</button>
-                                <button class="remove-item" data-product-id="${item.id}">Remove</button>
-                            </div>
-                        </div>
-                    </div>
-                `).join('') : 
-                '<div class="empty-quotation">Your quotation list is empty</div>';
-
-            quotationItemsContainer.innerHTML = quotationItemsHTML;
-            quotationHeader.textContent = `Quotation Cart (${getQuotationItemsCount()} items)`;
-            requestButton.disabled = window.quotationItems.length === 0;
-
-            // Re-attach event listeners
-            attachQuotationEventListeners();
-            updateQuotationButton();
-        }
-
-        // Function to attach event listeners to quotation items
-        function attachQuotationEventListeners() {
-            // Quantity increase
-            quotationCart.querySelectorAll('.quantity-btn.plus').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const productId = e.target.getAttribute('data-product-id');
-                    const item = window.quotationItems.find(item => item.id == productId);
-                    if (item) {
-                        item.quantity++;
-                        updateQuotationDisplay();
-                    }
-                });
-            });
-
-            // Quantity decrease
-            quotationCart.querySelectorAll('.quantity-btn.minus').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const productId = e.target.getAttribute('data-product-id');
-                    const item = window.quotationItems.find(item => item.id == productId);
-                    if (item && item.quantity > 1) {
-                        item.quantity--;
-                        updateQuotationDisplay();
-                    }
-                });
-            });
-
-            // Remove item
-            quotationCart.querySelectorAll('.remove-item').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const productId = e.target.getAttribute('data-product-id');
-                    window.quotationItems = window.quotationItems.filter(item => item.id != productId);
-                    updateQuotationDisplay();
-                });
-            });
-
-            // Request all quotes button - ONLY opens WhatsApp when user clicks this button
-            const requestBtn = quotationCart.querySelector('.request-all-quotes');
-            if (requestBtn) {
-                requestBtn.addEventListener('click', () => {
-                    requestAllQuotes();
-                });
-            }
-        }
-
-        // Initial event listeners
-        attachQuotationEventListeners();
-
-        // Close quotation cart function
-        const closeQuotationCart = () => {
-            quotationCart.classList.remove('active');
-            overlay.style.opacity = '0';
-            overlay.style.visibility = 'hidden';
-            document.body.style.overflow = 'auto';
-            setTimeout(() => {
-                if (document.body.contains(quotationCart)) document.body.removeChild(quotationCart);
-                if (document.body.contains(overlay)) document.body.removeChild(overlay);
-                if (document.head.contains(quotationStyles)) document.head.removeChild(quotationStyles);
-            }, 300);
-        };
-
-        // Close quotation cart event listeners
-        quotationCart.querySelector('.close-quotation').addEventListener('click', closeQuotationCart);
-        overlay.addEventListener('click', closeQuotationCart);
-        
-        // Close quotation cart with Escape key
-        const escapeHandler = (e) => {
-            if (e.key === 'Escape') {
-                closeQuotationCart();
-                document.removeEventListener('keydown', escapeHandler);
-            }
-        };
-        document.addEventListener('keydown', escapeHandler);
-    }
-
-    // Function to request all quotes via WhatsApp - ONLY when user clicks the button
-    function requestAllQuotes() {
-        if (window.quotationItems.length === 0) {
-            alert('Your quotation cart is empty');
-            return;
-        }
-
-        const whatsappNumber = "917358223153"; // Replace with your WhatsApp number
-        
-        let message = "Hi, I would like to request quotes for the following products:\n\n";
-        
-        window.quotationItems.forEach((item, index) => {
-            const variantText = item.selectedVariant ? ` (${item.selectedVariant.name})` : '';
-            message += `${index + 1}. ${item.name}${variantText} - Quantity: ${item.quantity}\n`;
-        });
-        
-        message += "\nPlease provide your best quotes for these items. Thank you!";
-        
-        const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
-        
-        // Only open WhatsApp when user explicitly clicks "Request All Quotes" button
-        console.log('Opening WhatsApp only because user clicked "Request All Quotes" button');
-        window.open(whatsappUrl, '_blank');
-    }
-
     // ===============================
-    // PRODUCT CARD CREATION - REMOVED REQUEST QUOTE FROM CARDS
+    // PRODUCT CARD CREATION
     // ===============================
 
     function createProductCard(product) {
         try {
             const isAdded = isInCart(product.id);
             const cartQuantity = getCartQuantity(product.id);
+            const isQuoted = isInQuotation(product.id);
+            const quoteQuantity = getQuotationQuantity(product.id);
             
             // Handle price display with consistent formatting
             let priceDisplay = '';
@@ -862,6 +447,12 @@
                                     <i class="fas fa-${isOutOfStock ? 'times' : 'shopping-cart'}"></i>
                                 </button>
                             ` : ''}
+                            <button class="action-btn request-quote ${isQuoted ? 'quoted' : ''}" 
+                                    data-product-id="${product.id}"
+                                    data-action="request-quote"
+                                    title="${isQuoted ? `Quoted (${quoteQuantity})` : 'Request Quote'}">
+                                <i class="fab fa-whatsapp"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -933,6 +524,18 @@
             const quantity = addToCart(product);
             return;
         }
+        
+        // Handle request quote
+        if (target.classList.contains('request-quote') || 
+            target.closest('.request-quote')) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            if (isProcessingClick) return;
+            
+            const quantity = addToQuotation(product);
+            return;
+        }
     }
 
     // Single event listener setup using event delegation
@@ -943,7 +546,7 @@
         // Add single event listener using capture phase for better performance
         document.addEventListener('click', handleProductCardClick, true);
         
-        console.log('Event delegation setup complete');
+        console.log('✅ Unified event delegation setup complete');
     }
 
     // ===============================
@@ -1019,29 +622,29 @@
             const basicResponse = await fetch(`${BASE_URL}/products?page=1`);
             if (basicResponse.ok) {
                 const basicData = await basicResponse.json();
-                console.log('Basic products working:', basicData.products?.length, 'products found');
+                console.log('✅ Basic products working:', basicData.products?.length, 'products found');
             }
         } catch (error) {
-            console.error('Basic products error:', error);
+            console.error('❌ Basic products error:', error);
         }
         
         try {
             const filterResponse = await fetch(`${BASE_URL}/products/filter-options`);
             if (filterResponse.ok) {
                 const filterData = await filterResponse.json();
-                console.log('Filter options working:', filterData);
+                console.log('✅ Filter options working:', filterData);
                 return filterData;
             } else {
                 throw new Error(`Filter endpoint failed: ${filterResponse.status}`);
             }
         } catch (error) {
-            console.error('Filter options error:', error);
+            console.error('❌ Filter options error:', error);
             return await fallbackExtractFilters();
         }
     }
 
     async function fallbackExtractFilters() {
-        console.log('Using fallback filter extraction...');
+        console.log('🔄 Using fallback filter extraction...');
         
         try {
             let allProducts = [];
@@ -1082,7 +685,7 @@
             };
             
         } catch (error) {
-            console.error('Fallback extraction failed:', error);
+            console.error('❌ Fallback extraction failed:', error);
             return {
                 categories: ['Tools', 'Hardware', 'Electrical', 'Accessories', 'Safety Equipment'],
                 brands: ['Bosch', 'Stanley', 'DeWalt', 'Black & Decker', 'Makita'],
@@ -1888,7 +1491,7 @@
     }
 
     // ===============================
-    // MODAL FUNCTIONS - WITH FIXED REQUEST QUOTE BUTTON
+    // MODAL FUNCTIONS (ABBREVIATED)
     // ===============================
 
     // Modal history management
@@ -2050,7 +1653,6 @@
         }
     }
 
-    // FIXED: Update modal quote button - NO AUTO WHATSAPP
     function updateModalQuoteButton() {
         let requestQuoteBtn = document.getElementById('modalRequestQuote');
         
@@ -2224,7 +1826,6 @@
         refreshDisplay();
     }
 
-    // FIXED: Handle modal quote click - NO AUTO WHATSAPP
     function handleModalQuoteClick(e) {
         e.preventDefault();
         e.stopPropagation();
@@ -2234,9 +1835,6 @@
         try {
             const quantity = addToQuotation(currentModalProduct);
             updateModalQuoteButton();
-            
-            // Show success message instead of opening WhatsApp
-            console.log('Item added to quotation successfully');
             
         } catch (error) {
             console.error('Error adding to quotation from modal:', error);
@@ -2252,30 +1850,145 @@
     }
 
     // ===============================
-    // CSS STYLES - UPDATED
+    // EVENT LISTENER SETUP
+    // ===============================
+
+    function setupEventListeners() {
+        const filterButton = document.getElementById('product-filter-search');
+        if (filterButton) {
+            filterButton.addEventListener('click', openFilterSidebar);
+        }
+
+        document.getElementById('close-filter-sidebar')?.addEventListener('click', closeFilterSidebar);
+        filterOverlay?.addEventListener('click', closeFilterSidebar);
+
+        const searchInput = document.getElementById('product-search-input');
+        const searchBtn = document.getElementById('search-products-btn');
+        const clearSearchBtn = document.getElementById('clear-search-btn');
+        
+        if (searchInput && searchBtn) {
+            searchBtn.addEventListener('click', performSearch);
+            searchInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    performSearch();
+                }
+            });
+            
+            searchInput.addEventListener('input', function(e) {
+                const hasValue = e.target.value.trim().length > 0;
+                if (clearSearchBtn) {
+                    clearSearchBtn.style.display = hasValue ? 'flex' : 'none';
+                }
+                setTimeout(updateSearchIndicator, 100);
+            });
+        }
+        
+        if (clearSearchBtn) {
+            clearSearchBtn.addEventListener('click', clearSearchInput);
+        }
+
+        const brandSearch = document.getElementById('brand-search');
+        if (brandSearch) {
+            brandSearch.addEventListener('input', function(e) {
+                filterBrandsInSidebar(e.target.value);
+            });
+        }
+
+        document.getElementById('apply-filters-btn')?.addEventListener('click', applyFiltersFromSidebar);
+        document.getElementById('clear-filters-btn')?.addEventListener('click', clearAllFiltersFromSidebar);
+
+        document.addEventListener('change', function(e) {
+            if (e.target.matches('input[name="price"]') || 
+                e.target.matches('input[name="stock"]') || 
+                e.target.matches('.brand-option input') ||
+                e.target.matches('.category-option input')) {
+                updateFilterState();
+                updateFilterUI();
+                setTimeout(updateSearchIndicator, 100);
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && filterSidebar?.classList.contains('active')) {
+                closeFilterSidebar();
+            }
+        });
+
+        // History management
+        window.addEventListener('popstate', handlePopState);
+        
+        window.addEventListener('beforeunload', (e) => {
+            try {
+                localStorage.setItem('cartItems', JSON.stringify(window.cartItems));
+                localStorage.setItem('quotationItems', JSON.stringify(window.quotationItems));
+            } catch (error) {
+                console.log('Could not save state:', error);
+            }
+            
+            if (isModalOpen) {
+                e.preventDefault();
+                return '';
+            }
+        });
+
+        // Modal event listeners
+        const modalAddToCartBtn = document.getElementById('modalAddToCart');
+        if (modalAddToCartBtn) {
+            modalAddToCartBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (modalAddToCartBtn.disabled || !currentModalProduct || isProcessingClick) return;
+                
+                try {
+                    const quantity = addToCart(currentModalProduct);
+                    
+                    if (quantity > 0) {
+                        updateModalCartButton();
+                    }
+                } catch (error) {
+                    console.error('Error adding to cart from modal:', error);
+                    alert('Error adding product to cart');
+                }
+            });
+        }
+        
+        const closeBtn = document.getElementById('closeModalBtn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeProductModal);
+        }
+        
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && isModalOpen) {
+                closeProductModal();
+            }
+        });
+        
+        const modal = document.getElementById('productModal');
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeProductModal();
+                }
+            });
+            
+            const modalContent = modal.querySelector('.product-modal-content');
+            if (modalContent) {
+                modalContent.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
+            }
+        }
+
+        console.log('✅ All event listeners attached');
+    }
+
+    // ===============================
+    // CSS STYLES
     // ===============================
 
     const combinedStyles = document.createElement('style');
     combinedStyles.textContent = `
-        /* Quotation badge animation */
-        @keyframes quotationBadgePulse {
-            0% { transform: scale(0); }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); }
-        }
-        
-        #quotation-cart-button {
-            position: relative !important;
-        }
-        
-        #quotation-cart-button[data-count="0"] .quotation-badge {
-            display: none !important;
-        }
-        
-        .quotation-badge {
-            pointer-events: none;
-        }
-        
         .cart-actions-container {
             display: flex;
             flex-direction: row;
@@ -2433,140 +2146,6 @@
     document.head.appendChild(combinedStyles);
 
     // ===============================
-    // EVENT LISTENER SETUP
-    // ===============================
-
-    function setupEventListeners() {
-        const filterButton = document.getElementById('product-filter-search');
-        if (filterButton) {
-            filterButton.addEventListener('click', openFilterSidebar);
-        }
-
-        document.getElementById('close-filter-sidebar')?.addEventListener('click', closeFilterSidebar);
-        filterOverlay?.addEventListener('click', closeFilterSidebar);
-
-        const searchInput = document.getElementById('product-search-input');
-        const searchBtn = document.getElementById('search-products-btn');
-        const clearSearchBtn = document.getElementById('clear-search-btn');
-        
-        if (searchInput && searchBtn) {
-            searchBtn.addEventListener('click', performSearch);
-            searchInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    performSearch();
-                }
-            });
-            
-            searchInput.addEventListener('input', function(e) {
-                const hasValue = e.target.value.trim().length > 0;
-                if (clearSearchBtn) {
-                    clearSearchBtn.style.display = hasValue ? 'flex' : 'none';
-                }
-                setTimeout(updateSearchIndicator, 100);
-            });
-        }
-        
-        if (clearSearchBtn) {
-            clearSearchBtn.addEventListener('click', clearSearchInput);
-        }
-
-        const brandSearch = document.getElementById('brand-search');
-        if (brandSearch) {
-            brandSearch.addEventListener('input', function(e) {
-                filterBrandsInSidebar(e.target.value);
-            });
-        }
-
-        document.getElementById('apply-filters-btn')?.addEventListener('click', applyFiltersFromSidebar);
-        document.getElementById('clear-filters-btn')?.addEventListener('click', clearAllFiltersFromSidebar);
-
-        document.addEventListener('change', function(e) {
-            if (e.target.matches('input[name="price"]') || 
-                e.target.matches('input[name="stock"]') || 
-                e.target.matches('.brand-option input') ||
-                e.target.matches('.category-option input')) {
-                updateFilterState();
-                updateFilterUI();
-                setTimeout(updateSearchIndicator, 100);
-            }
-        });
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && filterSidebar?.classList.contains('active')) {
-                closeFilterSidebar();
-            }
-        });
-
-        // History management
-        window.addEventListener('popstate', handlePopState);
-        
-        window.addEventListener('beforeunload', (e) => {
-            try {
-                localStorage.setItem('cartItems', JSON.stringify(window.cartItems));
-                localStorage.setItem('quotationItems', JSON.stringify(window.quotationItems));
-            } catch (error) {
-                console.log('Could not save state:', error);
-            }
-            
-            if (isModalOpen) {
-                e.preventDefault();
-                return '';
-            }
-        });
-
-        // Modal event listeners
-        const modalAddToCartBtn = document.getElementById('modalAddToCart');
-        if (modalAddToCartBtn) {
-            modalAddToCartBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                if (modalAddToCartBtn.disabled || !currentModalProduct || isProcessingClick) return;
-                
-                try {
-                    const quantity = addToCart(currentModalProduct);
-                    
-                    if (quantity > 0) {
-                        updateModalCartButton();
-                    }
-                } catch (error) {
-                    console.error('Error adding to cart from modal:', error);
-                    alert('Error adding product to cart');
-                }
-            });
-        }
-        
-        const closeBtn = document.getElementById('closeModalBtn');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', closeProductModal);
-        }
-        
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape' && isModalOpen) {
-                closeProductModal();
-            }
-        });
-        
-        const modal = document.getElementById('productModal');
-        if (modal) {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    closeProductModal();
-                }
-            });
-            
-            const modalContent = modal.querySelector('.product-modal-content');
-            if (modalContent) {
-                modalContent.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                });
-            }
-        }
-
-        console.log('All event listeners attached');
-    }
-
-    // ===============================
     // GLOBAL FUNCTION EXPORTS
     // ===============================
 
@@ -2591,15 +2170,11 @@
     window.isInQuotation = isInQuotation;
     window.getCartQuantity = getCartQuantity;
     window.getQuotationQuantity = getQuotationQuantity;
-    window.getQuotationItemsCount = getQuotationItemsCount;
     window.updateModalCartButton = updateModalCartButton;
     window.updateModalQuoteButton = updateModalQuoteButton;
-    window.updateQuotationButton = updateQuotationButton;
     window.createProductCard = createProductCard;
     window.clearSearchInput = clearSearchInput;
     window.clearAllFiltersFromSidebar = clearAllFiltersFromSidebar;
-    window.showQuotationCart = showQuotationCart;
-    window.requestAllQuotes = requestAllQuotes;
 
     window.retryLoadFilterOptions = function() {
         isFilterOptionsLoaded = false;
@@ -2664,19 +2239,10 @@
         // Load initial products
         loadProducts(1, false);
         
-        // Initialize quotation button
-        updateQuotationButton();
-        
-        // Setup quotation cart button event listener
-        const quotationButton = document.getElementById('quotation-cart-button');
-        if (quotationButton) {
-            quotationButton.addEventListener('click', showQuotationCart);
-        }
-        
         setTimeout(debugTestEndpoints, 1000);
         setTimeout(updateSearchIndicator, 500);
         
-        console.log('Combined Products & Filter System initialized successfully - Quote button fixed!');
+        console.log('✅ Combined Products & Filter System initialized successfully');
     }
 
     // Initialize when DOM is ready
@@ -2686,6 +2252,6 @@
         setTimeout(initializeCombinedSystem, 100);
     }
 
-    console.log('Combined system loaded and ready - Quote functionality fixed');
+    console.log('🔍 Combined system loaded and ready');
 
 })();
