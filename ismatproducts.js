@@ -307,7 +307,11 @@ function addToQuotation(product) {
     
     if (existingItem) {
         existingItem.quantity += 1;
-        updateQuotationButton();
+        
+        if (window.updateQuotationButton) {
+            window.updateQuotationButton();
+        }
+        
         return existingItem.quantity;
     }
     
@@ -329,8 +333,12 @@ function addToQuotation(product) {
     };
     
     window.quotationItems.push(newItem);
-    updateQuotationButton();
     
+    if (window.updateQuotationButton) {
+        window.updateQuotationButton();
+    }
+    
+    // REMOVED: No automatic WhatsApp opening
     console.log('✅ Item added to quotation cart - NO WhatsApp opened');
     return 1;
 }
@@ -339,11 +347,11 @@ function addToQuotation(product) {
 function updateQuotationButton() {
     const quotationButton = document.getElementById('quotation-cart-button');
     if (!quotationButton) {
-        console.warn('Quotation button not found');
+        console.warn('Quotation button not found with ID: quotation-cart-button');
         return;
     }
     
-    const count = getQuotationItemsCount();
+    const count = window.quotationItems.reduce((total, item) => total + item.quantity, 0);
     
     // Remove existing badge if any
     const existingBadge = quotationButton.querySelector('.quotation-badge');
@@ -359,10 +367,10 @@ function updateQuotationButton() {
     if (quotationText) {
         quotationText.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
     } else {
-        // If no .quotation-text element, try to update button text carefully
-        const textNode = Array.from(quotationButton.childNodes).find(node => node.nodeType === 3);
-        if (textNode) {
-            textNode.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
+        // Try to find and update text node
+        const textNodes = Array.from(quotationButton.childNodes).filter(node => node.nodeType === 3);
+        if (textNodes.length > 0) {
+            textNodes[0].textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
         }
     }
     
@@ -2266,10 +2274,17 @@ function requestAllQuotes() {
             filterButton.addEventListener('click', openFilterSidebar);
         }
 
-        // Quotation cart button
         const quotationButton = document.getElementById('quotation-cart-button');
         if (quotationButton) {
-            quotationButton.addEventListener('click', showQuotationCart);
+            quotationButton.addEventListener('click', function() {
+                if (window.showQuotationCart) {
+                    window.showQuotationCart();
+                } else {
+                    console.error('showQuotationCart function not found - make sure AddQuotation.js is included');
+                }
+            });
+        } else {
+            console.warn('Quotation cart button not found in DOM');
         }
 
         document.getElementById('close-filter-sidebar')?.addEventListener('click', closeFilterSidebar);
