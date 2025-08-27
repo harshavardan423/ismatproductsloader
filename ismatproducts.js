@@ -277,88 +277,495 @@
         return item ? item.quantity : 0;
     }
 
-    // ===============================
-    // QUOTATION MANAGEMENT FUNCTIONS
-    // ===============================
+    // COMPLETE QUOTATION SYSTEM FIX
+// Replace the entire quotation section in your ismatproducts.js with this:
 
-    // Function to add item to quotation with debouncing
-    function addToQuotation(product) {
-        if (!product || isProcessingClick) return 0;
+// ===============================
+// QUOTATION MANAGEMENT FUNCTIONS (FIXED)
+// ===============================
+
+// Function to get quotation items count
+function getQuotationItemsCount() {
+    return window.quotationItems.reduce((total, item) => total + item.quantity, 0);
+}
+
+// Function to add item to quotation - NO AUTO WHATSAPP
+function addToQuotation(product) {
+    if (!product || isProcessingClick) return 0;
+    
+    isProcessingClick = true;
+    
+    // Add a small delay to prevent rapid multiple clicks
+    setTimeout(() => {
+        isProcessingClick = false;
+    }, 500);
+    
+    const existingItem = window.quotationItems.find(item => 
+        item.id === product.id && 
+        (item.selectedVariant?.name || null) === (selectedVariant?.name || null)
+    );
+    
+    if (existingItem) {
+        existingItem.quantity += 1;
+        updateQuotationButton();
+        return existingItem.quantity;
+    }
+    
+    const price = product.offer_price || product.mrp || 0;
+    const finalPrice = selectedVariant ? (selectedVariant.price || price) : price;
+    
+    const newItem = {
+        id: product.id,
+        name: product.product_name,
+        price: parseFloat(finalPrice),
+        image: getImageUrl(product.product_image_urls && product.product_image_urls[0]),
+        category: product.category,
+        quantity: 1,
+        selectedVariant: selectedVariant ? {
+            name: selectedVariant.name,
+            price: selectedVariant.price,
+            sku: selectedVariant.sku || product.sku
+        } : null
+    };
+    
+    window.quotationItems.push(newItem);
+    updateQuotationButton();
+    
+    console.log('✅ Item added to quotation cart - NO WhatsApp opened');
+    return 1;
+}
+
+// Function to update quotation button UI
+function updateQuotationButton() {
+    const quotationButton = document.getElementById('quotation-cart-button');
+    if (!quotationButton) {
+        console.warn('Quotation button not found');
+        return;
+    }
+    
+    const count = getQuotationItemsCount();
+    
+    // Remove existing badge if any
+    const existingBadge = quotationButton.querySelector('.quotation-badge');
+    if (existingBadge) {
+        existingBadge.remove();
+    }
+    
+    // Set data attribute for CSS styling
+    quotationButton.setAttribute('data-count', count);
+    
+    // Update button text if it has a .quotation-text element
+    const quotationText = quotationButton.querySelector('.quotation-text');
+    if (quotationText) {
+        quotationText.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
+    } else {
+        // If no .quotation-text element, try to update button text carefully
+        const textNode = Array.from(quotationButton.childNodes).find(node => node.nodeType === 3);
+        if (textNode) {
+            textNode.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
+        }
+    }
+    
+    // Add visual badge if count > 0
+    if (count > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'quotation-badge';
+        badge.textContent = count;
+        badge.style.cssText = `
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #28a745;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            animation: quotationBadgePulse 0.3s ease-out;
+        `;
         
-        isProcessingClick = true;
+        // Make sure quotation button has relative positioning
+        quotationButton.style.position = 'relative';
+        quotationButton.appendChild(badge);
+    }
+    
+    console.log(`✅ Quotation button updated - count: ${count}`);
+}
+
+// Function to show quotation cart
+function showQuotationCart() {
+    const quotationCart = document.createElement('div');
+    quotationCart.className = 'quotation-sidebar';
+    
+    const quotationItemsHTML = window.quotationItems.length > 0 ? 
+        window.quotationItems.map(item => `
+            <div class="quotation-item" data-product-id="${item.id}">
+                <img src="${item.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0zMCAyMFY0ME0yMCAzMEg0MCIgc3Ryb2tlPSIjQ0NDQ0NDIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4='}" alt="${item.name}" class="quotation-item-image">
+                <div class="quotation-item-details">
+                    <h4>${item.name}</h4>
+                    ${item.selectedVariant ? `<p class="variant-info">Variant: ${item.selectedVariant.name}</p>` : ''}
+                    <div class="quantity-controls">
+                        <button class="quantity-btn minus" data-product-id="${item.id}">-</button>
+                        <span class="quantity">${item.quantity}</span>
+                        <button class="quantity-btn plus" data-product-id="${item.id}">+</button>
+                        <button class="remove-item" data-product-id="${item.id}">Remove</button>
+                    </div>
+                </div>
+            </div>
+        `).join('') : 
+        '<div class="empty-quotation">Your quotation list is empty</div>';
+
+    quotationCart.innerHTML = `
+        <div class="quotation-header">
+            <h2>Quotation Cart (${getQuotationItemsCount()} items)</h2>
+            <button class="close-quotation">&times;</button>
+        </div>
+        <div class="quotation-items">
+            ${quotationItemsHTML}
+        </div>
+        <div class="quotation-footer">
+            <button class="request-all-quotes" ${window.quotationItems.length === 0 ? 'disabled' : ''}>Request All Quotes via WhatsApp</button>
+        </div>
+    `;
+
+    // Add styles for quotation sidebar
+    const styles = document.createElement('style');
+    styles.id = 'quotation-sidebar-styles';
+    styles.textContent = `
+        .quotation-sidebar {
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 400px;
+            height: 100%;
+            background: white;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+            transition: right 0.3s ease;
+            z-index: 1000;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            border-left: 3px solid #28a745;
+        }
+        .quotation-sidebar.active { right: 0; }
+        .quotation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+            padding: 20px;
+        }
+        .quotation-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: #28a745;
+        }
+        .close-quotation {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+        }
+        .close-quotation:hover { background: #f0f0f0; }
+        .quotation-items {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 0;
+        }
+        .quotation-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding: 0 20px 15px 20px;
+        }
+        .quotation-item:last-child { border-bottom: none; }
+        .quotation-item-image {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 8px;
+            flex-shrink: 0;
+        }
+        .quotation-item-details { flex: 1; }
+        .quotation-item h4 {
+            margin: 0 0 5px 0;
+            font-size: 16px;
+            line-height: 1.3;
+            color: #333;
+        }
+        .quotation-item .variant-info {
+            margin: 0 0 10px 0;
+            font-size: 13px;
+            color: #666;
+            font-style: italic;
+        }
+        .quantity-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .quantity-btn {
+            width: 30px;
+            height: 30px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .quantity-btn:hover {
+            background: #f0f0f0;
+            border-color: #28a745;
+        }
+        .quantity-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .quantity {
+            font-weight: bold;
+            min-width: 30px;
+            text-align: center;
+        }
+        .remove-item {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.2s;
+        }
+        .remove-item:hover { background: #b91c1c; }
+        .empty-quotation {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 40px 20px;
+        }
+        .quotation-footer {
+            border-top: 1px solid #eee;
+            padding: 20px;
+        }
+        .request-all-quotes {
+            width: 100%;
+            padding: 15px;
+            background: #25d366;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        .request-all-quotes:hover:not(:disabled) { background: #128c7e; }
+        .request-all-quotes:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .quotation-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            z-index: 999;
+        }
+        .quotation-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
         
-        // Add a small delay to prevent rapid multiple clicks
-        setTimeout(() => {
-            isProcessingClick = false;
-        }, 500);
+        @keyframes quotationBadgePulse {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
         
-        const existingItem = window.quotationItems.find(item => 
-            item.id === product.id && 
-            (item.selectedVariant?.name || null) === (selectedVariant?.name || null)
-        );
+        #quotation-cart-button {
+            position: relative !important;
+        }
         
-        if (existingItem) {
-            existingItem.quantity += 1;
-            
-            if (window.updateQuotationButton) {
-                window.updateQuotationButton();
+        @media (max-width: 480px) {
+            .quotation-sidebar {
+                width: 100%;
+                right: -100%;
             }
-            
-            return existingItem.quantity;
         }
-        
-        const price = product.offer_price || product.mrp || 0;
-        const finalPrice = selectedVariant ? (selectedVariant.price || price) : price;
-        
-        const newItem = {
-            id: product.id,
-            name: product.product_name,
-            price: parseFloat(finalPrice),
-            image: getImageUrl(product.product_image_urls && product.product_image_urls[0]),
-            category: product.category,
-            quantity: 1,
-            selectedVariant: selectedVariant ? {
-                name: selectedVariant.name,
-                price: selectedVariant.price,
-                sku: selectedVariant.sku || product.sku
-            } : null
-        };
-        
-        window.quotationItems.push(newItem);
-        
-        if (window.updateQuotationButton) {
-            window.updateQuotationButton();
+    `;
+
+    // Remove existing styles if they exist
+    const existingStyles = document.getElementById('quotation-sidebar-styles');
+    if (existingStyles) {
+        existingStyles.remove();
+    }
+    
+    document.head.appendChild(styles);
+    document.body.appendChild(quotationCart);
+
+    // Add overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'quotation-overlay';
+    document.body.appendChild(overlay);
+
+    // Show quotation cart and overlay
+    setTimeout(() => {
+        quotationCart.classList.add('active');
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }, 10);
+
+    // Function to update quotation display
+    function updateQuotationDisplay() {
+        const quotationItemsContainer = quotationCart.querySelector('.quotation-items');
+        const requestButton = quotationCart.querySelector('.request-all-quotes');
+        const quotationHeader = quotationCart.querySelector('.quotation-header h2');
+
+        const quotationItemsHTML = window.quotationItems.length > 0 ? 
+            window.quotationItems.map(item => `
+                <div class="quotation-item" data-product-id="${item.id}">
+                    <img src="${item.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0zMCAyMFY0ME0yMCAzMEg0MCIgc3Ryb2tlPSIjQ0NDQ0NDIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4='}" alt="${item.name}" class="quotation-item-image">
+                    <div class="quotation-item-details">
+                        <h4>${item.name}</h4>
+                        ${item.selectedVariant ? `<p class="variant-info">Variant: ${item.selectedVariant.name}</p>` : ''}
+                        <div class="quantity-controls">
+                            <button class="quantity-btn minus" data-product-id="${item.id}" ${item.quantity <= 1 ? 'disabled' : ''}>-</button>
+                            <span class="quantity">${item.quantity}</span>
+                            <button class="quantity-btn plus" data-product-id="${item.id}">+</button>
+                            <button class="remove-item" data-product-id="${item.id}">Remove</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('') : 
+            '<div class="empty-quotation">Your quotation list is empty</div>';
+
+        quotationItemsContainer.innerHTML = quotationItemsHTML;
+        quotationHeader.textContent = `Quotation Cart (${getQuotationItemsCount()} items)`;
+        requestButton.disabled = window.quotationItems.length === 0;
+
+        // Re-attach event listeners
+        attachQuotationEventListeners();
+        updateQuotationButton();
+    }
+
+    // Function to attach event listeners to quotation items
+    function attachQuotationEventListeners() {
+        // Quantity increase
+        quotationCart.querySelectorAll('.quantity-btn.plus').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const productId = parseInt(e.target.getAttribute('data-product-id'));
+                const item = window.quotationItems.find(item => item.id === productId);
+                if (item) {
+                    item.quantity++;
+                    updateQuotationDisplay();
+                }
+            });
+        });
+
+        // Quantity decrease
+        quotationCart.querySelectorAll('.quantity-btn.minus').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const productId = parseInt(e.target.getAttribute('data-product-id'));
+                const item = window.quotationItems.find(item => item.id === productId);
+                if (item && item.quantity > 1) {
+                    item.quantity--;
+                    updateQuotationDisplay();
+                }
+            });
+        });
+
+        // Remove item
+        quotationCart.querySelectorAll('.remove-item').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const productId = parseInt(e.target.getAttribute('data-product-id'));
+                window.quotationItems = window.quotationItems.filter(item => item.id !== productId);
+                updateQuotationDisplay();
+            });
+        });
+
+        // Request all quotes button
+        const requestBtn = quotationCart.querySelector('.request-all-quotes');
+        if (requestBtn) {
+            requestBtn.addEventListener('click', requestAllQuotes);
         }
-        
-        // Generate WhatsApp message
-        const variantText = selectedVariant ? ` (${selectedVariant.name})` : '';
-        const message = `Hi, I'm interested in ${product.product_name}${variantText}`;
-        const whatsappNumber = product.whatsapp_number || '917738096075';
-        const whatsappUrl = `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
-        
-        // Open WhatsApp in new tab
-        window.open(whatsappUrl, '_blank');
-        
-        return 1;
     }
 
-    // Function to check if item is in quotation
-    function isInQuotation(productId, variantId = null) {
-        return window.quotationItems.some(item => 
-            item.id === productId && 
-            (item.selectedVariant?.name || null) === variantId
-        );
+    // Initial event listeners
+    attachQuotationEventListeners();
+
+    // Close quotation cart function
+    const closeQuotationCart = () => {
+        quotationCart.classList.remove('active');
+        overlay.classList.remove('active');
+        document.body.style.overflow = 'auto';
+        setTimeout(() => {
+            if (document.body.contains(quotationCart)) document.body.removeChild(quotationCart);
+            if (document.body.contains(overlay)) document.body.removeChild(overlay);
+            if (document.head.contains(styles)) document.head.removeChild(styles);
+        }, 300);
+    };
+
+    // Close quotation cart event listeners
+    quotationCart.querySelector('.close-quotation').addEventListener('click', closeQuotationCart);
+    overlay.addEventListener('click', closeQuotationCart);
+    
+    // Close with Escape key
+    const escapeHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeQuotationCart();
+            document.removeEventListener('keydown', escapeHandler);
+        }
+    };
+    document.addEventListener('keydown', escapeHandler);
+}
+
+// Function to request all quotes via WhatsApp
+function requestAllQuotes() {
+    if (window.quotationItems.length === 0) {
+        alert('Your quotation cart is empty');
+        return;
     }
 
-    // Function to get item quantity in quotation
-    function getQuotationQuantity(productId, variantId = null) {
-        const item = window.quotationItems.find(item => 
-            item.id === productId && 
-            (item.selectedVariant?.name || null) === variantId
-        );
-        return item ? item.quantity : 0;
-    }
-
+    const whatsappNumber = "917358223153"; // Your WhatsApp number
+    
+    let message = "Hi, I would like to request quotes for the following products:\n\n";
+    
+    window.quotationItems.forEach((item, index) => {
+        const variantText = item.selectedVariant ? ` (${item.selectedVariant.name})` : '';
+        message += `${index + 1}. ${item.name}${variantText} - Quantity: ${item.quantity}\n`;
+    });
+    
+    message += "\nPlease provide your best quotes for these items. Thank you!";
+    
+    const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
+    
+    console.log('Opening WhatsApp for quote request');
+    window.open(whatsappUrl, '_blank');
+}
     // ===============================
     // PRODUCT CARD CREATION
     // ===============================
@@ -1859,6 +2266,12 @@
             filterButton.addEventListener('click', openFilterSidebar);
         }
 
+        // Quotation cart button
+        const quotationButton = document.getElementById('quotation-cart-button');
+        if (quotationButton) {
+            quotationButton.addEventListener('click', showQuotationCart);
+        }
+
         document.getElementById('close-filter-sidebar')?.addEventListener('click', closeFilterSidebar);
         filterOverlay?.addEventListener('click', closeFilterSidebar);
 
@@ -2166,6 +2579,10 @@
     window.appendProductsToGrid = appendProductsToGrid;
     window.addToCart = addToCart;
     window.addToQuotation = addToQuotation;
+    window.updateQuotationButton = updateQuotationButton;
+    window.showQuotationCart = showQuotationCart;
+    window.getQuotationItemsCount = getQuotationItemsCount;
+    window.requestAllQuotes = requestAllQuotes;
     window.isInCart = isInCart;
     window.isInQuotation = isInQuotation;
     window.getCartQuantity = getCartQuantity;
