@@ -1,5 +1,5 @@
 // ===============================
-// COMBINED PRODUCTS & FILTER SYSTEM - FIXED
+// COMBINED PRODUCTS & FILTER SYSTEM
 // ===============================
 
 (function() {
@@ -278,10 +278,10 @@
     }
 
     // ===============================
-    // QUOTATION MANAGEMENT FUNCTIONS - FIXED
+    // QUOTATION MANAGEMENT FUNCTIONS
     // ===============================
 
-    // FIXED: Function to add item to quotation - NO AUTO WHATSAPP
+    // Function to add item to quotation with debouncing
     function addToQuotation(product) {
         if (!product || isProcessingClick) return 0;
         
@@ -304,7 +304,6 @@
                 window.updateQuotationButton();
             }
             
-            console.log('✅ Added to existing quotation item - NO WhatsApp opened');
             return existingItem.quantity;
         }
         
@@ -331,78 +330,16 @@
             window.updateQuotationButton();
         }
         
-        // REMOVED: No longer automatically opens WhatsApp
-        console.log('✅ Added new item to quotation - NO WhatsApp opened');
+        // Generate WhatsApp message
+        const variantText = selectedVariant ? ` (${selectedVariant.name})` : '';
+        const message = `Hi, I'm interested in ${product.product_name}${variantText}`;
+        const whatsappNumber = product.whatsapp_number || '917738096075';
+        const whatsappUrl = `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
+        
+        // Open WhatsApp in new tab
+        window.open(whatsappUrl, '_blank');
         
         return 1;
-    }
-
-    // Function to get quotation items count
-    function getQuotationItemsCount() {
-        return window.quotationItems.reduce((total, item) => total + item.quantity, 0);
-    }
-
-    // FIXED: Function to update quotation button display
-    function updateQuotationButton() {
-        const quotationButton = document.getElementById('quotation-cart-button');
-        if (!quotationButton) return;
-        
-        const count = getQuotationItemsCount();
-        
-        // Remove existing badge if any
-        const existingBadge = quotationButton.querySelector('.quotation-badge');
-        if (existingBadge) {
-            existingBadge.remove();
-        }
-        
-        // Set data attribute for CSS styling
-        quotationButton.setAttribute('data-count', count);
-        
-        // Update button text if it has a .quotation-text element
-        const quotationText = quotationButton.querySelector('.quotation-text');
-        if (quotationText) {
-            quotationText.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
-        } else {
-            // If no .quotation-text element, update the button text directly (if it's just text)
-            const textNode = Array.from(quotationButton.childNodes).find(node => node.nodeType === 3);
-            if (textNode) {
-                textNode.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
-            }
-        }
-        
-        // Add visual badge if count > 0
-        if (count > 0) {
-            const badge = document.createElement('span');
-            badge.className = 'quotation-badge';
-            badge.textContent = count;
-            badge.style.cssText = `
-                position: absolute;
-                top: -8px;
-                right: -8px;
-                background: #28a745;
-                color: white;
-                border-radius: 50%;
-                width: 20px;
-                height: 20px;
-                font-size: 12px;
-                font-weight: bold;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 10;
-                animation: quotationBadgePulse 0.3s ease-out;
-            `;
-            
-            // Make sure quotation button has relative positioning
-            const currentPosition = window.getComputedStyle(quotationButton).position;
-            if (currentPosition === 'static') {
-                quotationButton.style.position = 'relative';
-            }
-            
-            quotationButton.appendChild(badge);
-        }
-        
-        console.log('✅ Quotation button updated - count:', count);
     }
 
     // Function to check if item is in quotation
@@ -597,7 +534,6 @@
             if (isProcessingClick) return;
             
             const quantity = addToQuotation(product);
-            console.log('✅ Quote button clicked - added to quotation only');
             return;
         }
     }
@@ -1899,7 +1835,6 @@
         try {
             const quantity = addToQuotation(currentModalProduct);
             updateModalQuoteButton();
-            console.log('✅ Modal quote button clicked - added to quotation only');
             
         } catch (error) {
             console.error('Error adding to quotation from modal:', error);
@@ -2049,7 +1984,7 @@
     }
 
     // ===============================
-    // CSS STYLES - UPDATED
+    // CSS STYLES
     // ===============================
 
     const combinedStyles = document.createElement('style');
@@ -2194,40 +2129,6 @@
             box-sizing: border-box;
         }
         
-        /* FIXED: Quotation badge styles */
-        @keyframes quotationBadgePulse {
-            0% { transform: scale(0); }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); }
-        }
-        
-        #quotation-cart-button {
-            position: relative !important;
-        }
-        
-        #quotation-cart-button[data-count="0"] .quotation-badge {
-            display: none !important;
-        }
-        
-        .quotation-badge {
-            pointer-events: none;
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            background: #28a745;
-            color: white;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            font-size: 12px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10;
-            animation: quotationBadgePulse 0.3s ease-out;
-        }
-        
         @media (max-width: 480px) {
             .cart-actions-container {
                 flex-direction: column;
@@ -2264,15 +2165,13 @@
     window.displayProductsInGrid = displayProductsInGrid;
     window.appendProductsToGrid = appendProductsToGrid;
     window.addToCart = addToCart;
-    window.addToQuotation = addToQuotation; // FIXED version
+    window.addToQuotation = addToQuotation;
     window.isInCart = isInCart;
     window.isInQuotation = isInQuotation;
     window.getCartQuantity = getCartQuantity;
     window.getQuotationQuantity = getQuotationQuantity;
     window.updateModalCartButton = updateModalCartButton;
     window.updateModalQuoteButton = updateModalQuoteButton;
-    window.updateQuotationButton = updateQuotationButton; // FIXED version
-    window.getQuotationItemsCount = getQuotationItemsCount;
     window.createProductCard = createProductCard;
     window.clearSearchInput = clearSearchInput;
     window.clearAllFiltersFromSidebar = clearAllFiltersFromSidebar;
@@ -2337,9 +2236,6 @@
         setupInfiniteScroll();
         setupFilteredInfiniteScroll();
         
-        // Initialize quotation button display
-        updateQuotationButton();
-        
         // Load initial products
         loadProducts(1, false);
         
@@ -2356,6 +2252,6 @@
         setTimeout(initializeCombinedSystem, 100);
     }
 
-    console.log('🔍 Combined system loaded and ready - Quote button fixed');
+    console.log('🔍 Combined system loaded and ready');
 
 })();
