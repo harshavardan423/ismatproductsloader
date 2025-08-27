@@ -330,74 +330,17 @@
             window.updateQuotationButton();
         }
         
-        // REMOVED: No automatic WhatsApp opening
-        // WhatsApp should only open when user clicks "Request All Quotes" button
+        // Generate WhatsApp message
+        const variantText = selectedVariant ? ` (${selectedVariant.name})` : '';
+        const message = `Hi, I'm interested in ${product.product_name}${variantText}`;
+        const whatsappNumber = product.whatsapp_number || '917738096075';
+        const whatsappUrl = `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
         
-        console.log('✅ Item added to quotation cart - NO WhatsApp opened');
+        // Open WhatsApp in new tab
+        window.open(whatsappUrl, '_blank');
+        
         return 1;
     }
-
-    // Function to update quotation button UI
-function updateQuotationButton() {
-    const quotationButton = document.getElementById('quotation-cart-button');
-    if (quotationButton) {
-        const count = window.quotationItems.reduce((total, item) => total + item.quantity, 0);
-        
-        // Remove existing badge if any
-        const existingBadge = quotationButton.querySelector('.quotation-badge');
-        if (existingBadge) {
-            existingBadge.remove();
-        }
-        
-        // Set data attribute for CSS styling
-        quotationButton.setAttribute('data-count', count);
-        
-        // Update button text if it has a .quotation-text element
-        const quotationText = quotationButton.querySelector('.quotation-text');
-        if (quotationText) {
-            quotationText.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
-        } else {
-            // If no .quotation-text element, check if button only contains text
-            if (quotationButton.childNodes.length === 1 && quotationButton.childNodes[0].nodeType === 3) {
-                quotationButton.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
-            }
-        }
-        
-        // Add visual badge if count > 0
-        if (count > 0) {
-            const badge = document.createElement('span');
-            badge.className = 'quotation-badge';
-            badge.textContent = count;
-            badge.style.cssText = `
-                position: absolute;
-                top: -8px;
-                right: -8px;
-                background: #28a745;
-                color: white;
-                border-radius: 50%;
-                width: 20px;
-                height: 20px;
-                font-size: 12px;
-                font-weight: bold;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 10;
-                animation: quotationBadgePulse 0.3s ease-out;
-            `;
-            
-            // Make sure quotation button has relative positioning
-            const currentPosition = window.getComputedStyle(quotationButton).position;
-            if (currentPosition === 'static') {
-                quotationButton.style.position = 'relative';
-            }
-            
-            quotationButton.appendChild(badge);
-        }
-    }
-    
-    console.log('✅ Quotation button updated - count:', window.quotationItems.reduce((total, item) => total + item.quantity, 0));
-}
 
     // Function to check if item is in quotation
     function isInQuotation(productId, variantId = null) {
