@@ -8,7 +8,7 @@
     // ===============================
     // GLOBAL STATE MANAGEMENT
     // ===============================
-
+    window.updateQuotationButton = updateQuotationButton;
     window.isFilterSystemActive = false;
 
     // Initialize global cart and quotation if they don't exist
