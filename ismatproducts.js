@@ -1,5 +1,5 @@
 // ===============================
-// COMBINED PRODUCTS & FILTER SYSTEM
+// COMBINED PRODUCTS & FILTER SYSTEM - FIXED QUOTE BUTTON
 // ===============================
 
 (function() {
@@ -186,6 +186,11 @@
         console.log(`Updated global product arrays with ${products.length} products`);
     }
 
+    // Function to get quotation items count
+    function getQuotationItemsCount() {
+        return window.quotationItems.reduce((total, item) => total + item.quantity, 0);
+    }
+
     // ===============================
     // CART MANAGEMENT FUNCTIONS
     // ===============================
@@ -278,10 +283,10 @@
     }
 
     // ===============================
-    // QUOTATION MANAGEMENT FUNCTIONS
+    // QUOTATION MANAGEMENT FUNCTIONS - FIXED
     // ===============================
 
-    // Function to add item to quotation with debouncing
+    // FIXED: Function to add item to quotation - NO AUTO WHATSAPP
     function addToQuotation(product) {
         if (!product || isProcessingClick) return 0;
         
@@ -330,15 +335,8 @@
             window.updateQuotationButton();
         }
         
-        // Generate WhatsApp message
-        const variantText = selectedVariant ? ` (${selectedVariant.name})` : '';
-        const message = `Hi, I'm interested in ${product.product_name}${variantText}`;
-        const whatsappNumber = product.whatsapp_number || '917738096075';
-        const whatsappUrl = `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
-        
-        // Open WhatsApp in new tab
-        window.open(whatsappUrl, '_blank');
-        
+        // REMOVED: No automatic WhatsApp opening here!
+        console.log('Item added to quotation successfully - NO WhatsApp opened');
         return 1;
     }
 
@@ -359,16 +357,74 @@
         return item ? item.quantity : 0;
     }
 
+    // Function to update quotation button
+    function updateQuotationButton() {
+        const quotationButton = document.getElementById('quotation-cart-button');
+        if (quotationButton) {
+            const count = getQuotationItemsCount();
+            
+            // Remove existing badge if any
+            const existingBadge = quotationButton.querySelector('.quotation-badge');
+            if (existingBadge) {
+                existingBadge.remove();
+            }
+            
+            // Set data attribute for CSS styling
+            quotationButton.setAttribute('data-count', count);
+            
+            // Update button text if it has a .quotation-text element
+            const quotationText = quotationButton.querySelector('.quotation-text');
+            if (quotationText) {
+                quotationText.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
+            } else {
+                // If no .quotation-text element, update the button text directly (if it's just text)
+                if (quotationButton.childNodes.length === 1 && quotationButton.childNodes[0].nodeType === 3) {
+                    quotationButton.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
+                }
+            }
+            
+            // Add visual badge if count > 0
+            if (count > 0) {
+                const badge = document.createElement('span');
+                badge.className = 'quotation-badge';
+                badge.textContent = count;
+                badge.style.cssText = `
+                    position: absolute;
+                    top: -8px;
+                    right: -8px;
+                    background: #28a745;
+                    color: white;
+                    border-radius: 50%;
+                    width: 20px;
+                    height: 20px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 10;
+                    animation: quotationBadgePulse 0.3s ease-out;
+                `;
+                
+                // Make sure quotation button has relative positioning
+                const currentPosition = window.getComputedStyle(quotationButton).position;
+                if (currentPosition === 'static') {
+                    quotationButton.style.position = 'relative';
+                }
+                
+                quotationButton.appendChild(badge);
+            }
+        }
+    }
+
     // ===============================
-    // PRODUCT CARD CREATION
+    // PRODUCT CARD CREATION - REMOVED REQUEST QUOTE FROM CARDS
     // ===============================
 
     function createProductCard(product) {
         try {
             const isAdded = isInCart(product.id);
             const cartQuantity = getCartQuantity(product.id);
-            const isQuoted = isInQuotation(product.id);
-            const quoteQuantity = getQuotationQuantity(product.id);
             
             // Handle price display with consistent formatting
             let priceDisplay = '';
@@ -447,12 +503,6 @@
                                     <i class="fas fa-${isOutOfStock ? 'times' : 'shopping-cart'}"></i>
                                 </button>
                             ` : ''}
-                            <button class="action-btn request-quote ${isQuoted ? 'quoted' : ''}" 
-                                    data-product-id="${product.id}"
-                                    data-action="request-quote"
-                                    title="${isQuoted ? `Quoted (${quoteQuantity})` : 'Request Quote'}">
-                                <i class="fab fa-whatsapp"></i>
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -524,18 +574,6 @@
             const quantity = addToCart(product);
             return;
         }
-        
-        // Handle request quote
-        if (target.classList.contains('request-quote') || 
-            target.closest('.request-quote')) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            if (isProcessingClick) return;
-            
-            const quantity = addToQuotation(product);
-            return;
-        }
     }
 
     // Single event listener setup using event delegation
@@ -546,7 +584,7 @@
         // Add single event listener using capture phase for better performance
         document.addEventListener('click', handleProductCardClick, true);
         
-        console.log('✅ Unified event delegation setup complete');
+        console.log('Event delegation setup complete');
     }
 
     // ===============================
@@ -622,29 +660,29 @@
             const basicResponse = await fetch(`${BASE_URL}/products?page=1`);
             if (basicResponse.ok) {
                 const basicData = await basicResponse.json();
-                console.log('✅ Basic products working:', basicData.products?.length, 'products found');
+                console.log('Basic products working:', basicData.products?.length, 'products found');
             }
         } catch (error) {
-            console.error('❌ Basic products error:', error);
+            console.error('Basic products error:', error);
         }
         
         try {
             const filterResponse = await fetch(`${BASE_URL}/products/filter-options`);
             if (filterResponse.ok) {
                 const filterData = await filterResponse.json();
-                console.log('✅ Filter options working:', filterData);
+                console.log('Filter options working:', filterData);
                 return filterData;
             } else {
                 throw new Error(`Filter endpoint failed: ${filterResponse.status}`);
             }
         } catch (error) {
-            console.error('❌ Filter options error:', error);
+            console.error('Filter options error:', error);
             return await fallbackExtractFilters();
         }
     }
 
     async function fallbackExtractFilters() {
-        console.log('🔄 Using fallback filter extraction...');
+        console.log('Using fallback filter extraction...');
         
         try {
             let allProducts = [];
@@ -685,7 +723,7 @@
             };
             
         } catch (error) {
-            console.error('❌ Fallback extraction failed:', error);
+            console.error('Fallback extraction failed:', error);
             return {
                 categories: ['Tools', 'Hardware', 'Electrical', 'Accessories', 'Safety Equipment'],
                 brands: ['Bosch', 'Stanley', 'DeWalt', 'Black & Decker', 'Makita'],
@@ -1491,7 +1529,7 @@
     }
 
     // ===============================
-    // MODAL FUNCTIONS (ABBREVIATED)
+    // MODAL FUNCTIONS - WITH FIXED REQUEST QUOTE BUTTON
     // ===============================
 
     // Modal history management
@@ -1653,6 +1691,7 @@
         }
     }
 
+    // FIXED: Update modal quote button - NO AUTO WHATSAPP
     function updateModalQuoteButton() {
         let requestQuoteBtn = document.getElementById('modalRequestQuote');
         
@@ -1826,6 +1865,7 @@
         refreshDisplay();
     }
 
+    // FIXED: Handle modal quote click - NO AUTO WHATSAPP
     function handleModalQuoteClick(e) {
         e.preventDefault();
         e.stopPropagation();
@@ -1835,6 +1875,9 @@
         try {
             const quantity = addToQuotation(currentModalProduct);
             updateModalQuoteButton();
+            
+            // Show success message instead of opening WhatsApp
+            console.log('Item added to quotation successfully');
             
         } catch (error) {
             console.error('Error adding to quotation from modal:', error);
@@ -1850,145 +1893,30 @@
     }
 
     // ===============================
-    // EVENT LISTENER SETUP
-    // ===============================
-
-    function setupEventListeners() {
-        const filterButton = document.getElementById('product-filter-search');
-        if (filterButton) {
-            filterButton.addEventListener('click', openFilterSidebar);
-        }
-
-        document.getElementById('close-filter-sidebar')?.addEventListener('click', closeFilterSidebar);
-        filterOverlay?.addEventListener('click', closeFilterSidebar);
-
-        const searchInput = document.getElementById('product-search-input');
-        const searchBtn = document.getElementById('search-products-btn');
-        const clearSearchBtn = document.getElementById('clear-search-btn');
-        
-        if (searchInput && searchBtn) {
-            searchBtn.addEventListener('click', performSearch);
-            searchInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    performSearch();
-                }
-            });
-            
-            searchInput.addEventListener('input', function(e) {
-                const hasValue = e.target.value.trim().length > 0;
-                if (clearSearchBtn) {
-                    clearSearchBtn.style.display = hasValue ? 'flex' : 'none';
-                }
-                setTimeout(updateSearchIndicator, 100);
-            });
-        }
-        
-        if (clearSearchBtn) {
-            clearSearchBtn.addEventListener('click', clearSearchInput);
-        }
-
-        const brandSearch = document.getElementById('brand-search');
-        if (brandSearch) {
-            brandSearch.addEventListener('input', function(e) {
-                filterBrandsInSidebar(e.target.value);
-            });
-        }
-
-        document.getElementById('apply-filters-btn')?.addEventListener('click', applyFiltersFromSidebar);
-        document.getElementById('clear-filters-btn')?.addEventListener('click', clearAllFiltersFromSidebar);
-
-        document.addEventListener('change', function(e) {
-            if (e.target.matches('input[name="price"]') || 
-                e.target.matches('input[name="stock"]') || 
-                e.target.matches('.brand-option input') ||
-                e.target.matches('.category-option input')) {
-                updateFilterState();
-                updateFilterUI();
-                setTimeout(updateSearchIndicator, 100);
-            }
-        });
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && filterSidebar?.classList.contains('active')) {
-                closeFilterSidebar();
-            }
-        });
-
-        // History management
-        window.addEventListener('popstate', handlePopState);
-        
-        window.addEventListener('beforeunload', (e) => {
-            try {
-                localStorage.setItem('cartItems', JSON.stringify(window.cartItems));
-                localStorage.setItem('quotationItems', JSON.stringify(window.quotationItems));
-            } catch (error) {
-                console.log('Could not save state:', error);
-            }
-            
-            if (isModalOpen) {
-                e.preventDefault();
-                return '';
-            }
-        });
-
-        // Modal event listeners
-        const modalAddToCartBtn = document.getElementById('modalAddToCart');
-        if (modalAddToCartBtn) {
-            modalAddToCartBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                if (modalAddToCartBtn.disabled || !currentModalProduct || isProcessingClick) return;
-                
-                try {
-                    const quantity = addToCart(currentModalProduct);
-                    
-                    if (quantity > 0) {
-                        updateModalCartButton();
-                    }
-                } catch (error) {
-                    console.error('Error adding to cart from modal:', error);
-                    alert('Error adding product to cart');
-                }
-            });
-        }
-        
-        const closeBtn = document.getElementById('closeModalBtn');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', closeProductModal);
-        }
-        
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape' && isModalOpen) {
-                closeProductModal();
-            }
-        });
-        
-        const modal = document.getElementById('productModal');
-        if (modal) {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    closeProductModal();
-                }
-            });
-            
-            const modalContent = modal.querySelector('.product-modal-content');
-            if (modalContent) {
-                modalContent.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                });
-            }
-        }
-
-        console.log('✅ All event listeners attached');
-    }
-
-    // ===============================
-    // CSS STYLES
+    // CSS STYLES - UPDATED
     // ===============================
 
     const combinedStyles = document.createElement('style');
     combinedStyles.textContent = `
+        /* Quotation badge animation */
+        @keyframes quotationBadgePulse {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        
+        #quotation-cart-button {
+            position: relative !important;
+        }
+        
+        #quotation-cart-button[data-count="0"] .quotation-badge {
+            display: none !important;
+        }
+        
+        .quotation-badge {
+            pointer-events: none;
+        }
+        
         .cart-actions-container {
             display: flex;
             flex-direction: row;
@@ -2146,6 +2074,140 @@
     document.head.appendChild(combinedStyles);
 
     // ===============================
+    // EVENT LISTENER SETUP
+    // ===============================
+
+    function setupEventListeners() {
+        const filterButton = document.getElementById('product-filter-search');
+        if (filterButton) {
+            filterButton.addEventListener('click', openFilterSidebar);
+        }
+
+        document.getElementById('close-filter-sidebar')?.addEventListener('click', closeFilterSidebar);
+        filterOverlay?.addEventListener('click', closeFilterSidebar);
+
+        const searchInput = document.getElementById('product-search-input');
+        const searchBtn = document.getElementById('search-products-btn');
+        const clearSearchBtn = document.getElementById('clear-search-btn');
+        
+        if (searchInput && searchBtn) {
+            searchBtn.addEventListener('click', performSearch);
+            searchInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    performSearch();
+                }
+            });
+            
+            searchInput.addEventListener('input', function(e) {
+                const hasValue = e.target.value.trim().length > 0;
+                if (clearSearchBtn) {
+                    clearSearchBtn.style.display = hasValue ? 'flex' : 'none';
+                }
+                setTimeout(updateSearchIndicator, 100);
+            });
+        }
+        
+        if (clearSearchBtn) {
+            clearSearchBtn.addEventListener('click', clearSearchInput);
+        }
+
+        const brandSearch = document.getElementById('brand-search');
+        if (brandSearch) {
+            brandSearch.addEventListener('input', function(e) {
+                filterBrandsInSidebar(e.target.value);
+            });
+        }
+
+        document.getElementById('apply-filters-btn')?.addEventListener('click', applyFiltersFromSidebar);
+        document.getElementById('clear-filters-btn')?.addEventListener('click', clearAllFiltersFromSidebar);
+
+        document.addEventListener('change', function(e) {
+            if (e.target.matches('input[name="price"]') || 
+                e.target.matches('input[name="stock"]') || 
+                e.target.matches('.brand-option input') ||
+                e.target.matches('.category-option input')) {
+                updateFilterState();
+                updateFilterUI();
+                setTimeout(updateSearchIndicator, 100);
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && filterSidebar?.classList.contains('active')) {
+                closeFilterSidebar();
+            }
+        });
+
+        // History management
+        window.addEventListener('popstate', handlePopState);
+        
+        window.addEventListener('beforeunload', (e) => {
+            try {
+                localStorage.setItem('cartItems', JSON.stringify(window.cartItems));
+                localStorage.setItem('quotationItems', JSON.stringify(window.quotationItems));
+            } catch (error) {
+                console.log('Could not save state:', error);
+            }
+            
+            if (isModalOpen) {
+                e.preventDefault();
+                return '';
+            }
+        });
+
+        // Modal event listeners
+        const modalAddToCartBtn = document.getElementById('modalAddToCart');
+        if (modalAddToCartBtn) {
+            modalAddToCartBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (modalAddToCartBtn.disabled || !currentModalProduct || isProcessingClick) return;
+                
+                try {
+                    const quantity = addToCart(currentModalProduct);
+                    
+                    if (quantity > 0) {
+                        updateModalCartButton();
+                    }
+                } catch (error) {
+                    console.error('Error adding to cart from modal:', error);
+                    alert('Error adding product to cart');
+                }
+            });
+        }
+        
+        const closeBtn = document.getElementById('closeModalBtn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeProductModal);
+        }
+        
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && isModalOpen) {
+                closeProductModal();
+            }
+        });
+        
+        const modal = document.getElementById('productModal');
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeProductModal();
+                }
+            });
+            
+            const modalContent = modal.querySelector('.product-modal-content');
+            if (modalContent) {
+                modalContent.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
+            }
+        }
+
+        console.log('All event listeners attached');
+    }
+
+    // ===============================
     // GLOBAL FUNCTION EXPORTS
     // ===============================
 
@@ -2170,8 +2232,10 @@
     window.isInQuotation = isInQuotation;
     window.getCartQuantity = getCartQuantity;
     window.getQuotationQuantity = getQuotationQuantity;
+    window.getQuotationItemsCount = getQuotationItemsCount;
     window.updateModalCartButton = updateModalCartButton;
     window.updateModalQuoteButton = updateModalQuoteButton;
+    window.updateQuotationButton = updateQuotationButton;
     window.createProductCard = createProductCard;
     window.clearSearchInput = clearSearchInput;
     window.clearAllFiltersFromSidebar = clearAllFiltersFromSidebar;
@@ -2239,10 +2303,13 @@
         // Load initial products
         loadProducts(1, false);
         
+        // Initialize quotation button
+        updateQuotationButton();
+        
         setTimeout(debugTestEndpoints, 1000);
         setTimeout(updateSearchIndicator, 500);
         
-        console.log('✅ Combined Products & Filter System initialized successfully');
+        console.log('Combined Products & Filter System initialized successfully - Quote button fixed!');
     }
 
     // Initialize when DOM is ready
@@ -2252,6 +2319,6 @@
         setTimeout(initializeCombinedSystem, 100);
     }
 
-    console.log('🔍 Combined system loaded and ready');
+    console.log('Combined system loaded and ready - Quote functionality fixed');
 
 })();
