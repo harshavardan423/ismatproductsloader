@@ -300,6 +300,7 @@
         if (existingItem) {
             existingItem.quantity += 1;
             
+            // Update quotation button UI
             if (window.updateQuotationButton) {
                 window.updateQuotationButton();
             }
@@ -326,21 +327,74 @@
         
         window.quotationItems.push(newItem);
         
+        // Update quotation button UI
         if (window.updateQuotationButton) {
             window.updateQuotationButton();
         }
         
-        // Generate WhatsApp message
-        const variantText = selectedVariant ? ` (${selectedVariant.name})` : '';
-        const message = `Hi, I'm interested in ${product.product_name}${variantText}`;
-        const whatsappNumber = product.whatsapp_number || '917738096075';
-        const whatsappUrl = `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
-        
-        // Open WhatsApp in new tab
-        window.open(whatsappUrl, '_blank');
+        // DO NOT OPEN WHATSAPP HERE - ONLY UPDATE UI
+        console.log('✅ Item added to quotation - NO WhatsApp opened');
         
         return 1;
     }
+
+    function updateQuotationButton() {
+    const quotationButton = document.getElementById('quotation-cart-button');
+    if (quotationButton) {
+        const count = window.quotationItems.reduce((total, item) => total + item.quantity, 0);
+        
+        // Remove existing badge if any
+        const existingBadge = quotationButton.querySelector('.quotation-badge');
+        if (existingBadge) {
+            existingBadge.remove();
+        }
+        
+        // Set data attribute for CSS styling
+        quotationButton.setAttribute('data-count', count);
+        
+        // Update button text if it has a .quotation-text element
+        const quotationText = quotationButton.querySelector('.quotation-text');
+        if (quotationText) {
+            quotationText.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
+        }
+        
+        // Add visual badge if count > 0
+        if (count > 0) {
+            const badge = document.createElement('span');
+            badge.className = 'quotation-badge';
+            badge.textContent = count;
+            badge.style.cssText = `
+                position: absolute;
+                top: -8px;
+                right: -8px;
+                background: #28a745;
+                color: white;
+                border-radius: 50%;
+                width: 20px;
+                height: 20px;
+                font-size: 12px;
+                font-weight: bold;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10;
+                animation: quotationBadgePulse 0.3s ease-out;
+            `;
+            
+            // Make sure quotation button has relative positioning
+            const currentPosition = window.getComputedStyle(quotationButton).position;
+            if (currentPosition === 'static') {
+                quotationButton.style.position = 'relative';
+            }
+            
+            quotationButton.appendChild(badge);
+        }
+    }
+    
+    console.log('✅ Quotation button updated - NO WhatsApp opened');
+}
+
+
 
     // Function to check if item is in quotation
     function isInQuotation(productId, variantId = null) {
@@ -694,6 +748,8 @@
             };
         }
     }
+
+    
 
     function updateSearchIndicator() {
         const searchButton = document.querySelector('.searchbutton');
