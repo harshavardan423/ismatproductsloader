@@ -346,9 +346,14 @@ function addToQuotation(product) {
 // Function to update quotation button UI
 function updateQuotationButton() {
     const quotationButton = document.getElementById('quotation-cart-button');
-    if (!quotationButton) {
-        console.warn('Quotation button not found with ID: quotation-cart-button');
-        return;
+    if (quotationButton) {
+        quotationButton.addEventListener('click', function() {
+            console.log('Quotation button clicked');
+            showQuotationCart(); // Call directly, not via window
+        });
+        console.log('✅ Quotation button event listener attached');
+    } else {
+        console.warn('❌ Quotation cart button not found in DOM - make sure you have an element with id="quotation-cart-button"');
     }
     
     const count = window.quotationItems.reduce((total, item) => total + item.quantity, 0);
@@ -2673,9 +2678,27 @@ function requestAllQuotes() {
         
         setTimeout(debugTestEndpoints, 1000);
         setTimeout(updateSearchIndicator, 500);
-        
+        setTimeout(initializeQuotationButton, 500);
         console.log('✅ Combined Products & Filter System initialized successfully');
+        
     }
+
+    function initializeQuotationButton() {
+    const quotationButton = document.getElementById('quotation-cart-button');
+    if (quotationButton) {
+        // Make sure button has relative positioning for badge
+        quotationButton.style.position = 'relative';
+        
+        // Update the button initially
+        updateQuotationButton();
+        
+        console.log('✅ Quotation button initialized');
+        return true;
+    } else {
+        console.warn('❌ Quotation button with id="quotation-cart-button" not found');
+        return false;
+    }
+}
 
     // Initialize when DOM is ready
     if (document.readyState === 'loading') {
