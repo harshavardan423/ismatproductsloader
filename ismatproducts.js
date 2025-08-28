@@ -636,25 +636,40 @@
             }
         }
         
-        // Update quote button
-        const quoteBtn = document.getElementById('modalRequestQuote') || (() => {
-            const modalActions = document.querySelector('.product-modal-actions');
-            if (!modalActions) return null;
-            
-            const btn = document.createElement('button');
-            btn.id = 'modalRequestQuote';
-            btn.className = 'product-modal-request-quote';
-            btn.addEventListener('click', () => addToQuotation(currentModalProduct));
-            modalActions.appendChild(btn);
-            return btn;
-        })();
+        // Update quote button - IMPROVED VERSION with guaranteed event listener
+        let quoteBtn = document.getElementById('modalRequestQuote');
         
+        // If button doesn't exist, create it
+        if (!quoteBtn) {
+            const modalActions = document.querySelector('.product-modal-actions');
+            if (modalActions) {
+                quoteBtn = document.createElement('button');
+                quoteBtn.id = 'modalRequestQuote';
+                quoteBtn.className = 'product-modal-request-quote';
+                modalActions.appendChild(quoteBtn);
+            }
+        }
+        
+        // Always ensure event listener is attached (handles both existing and new buttons)
         if (quoteBtn && currentModalProduct) {
+            // Remove any existing listeners to prevent duplicates by cloning the button
+            const newQuoteBtn = quoteBtn.cloneNode(true);
+            quoteBtn.parentNode.replaceChild(newQuoteBtn, quoteBtn);
+            
+            // Add fresh event listener
+            newQuoteBtn.addEventListener('click', () => {
+                if (currentModalProduct && !isProcessingClick) {
+                    addToQuotation(currentModalProduct);
+                    updateModalButtons();
+                }
+            });
+            
+            // Update button text and state
             const isQuoted = isInQuotation(currentModalProduct.id, variantId);
             const quantity = getQuotationQuantity(currentModalProduct.id, variantId);
             
-            quoteBtn.className = isQuoted ? 'quoted' : '';
-            quoteBtn.innerHTML = `<i class="fab fa-whatsapp"></i> ${isQuoted ? `QUOTED (${quantity})` : 'REQUEST QUOTE'}`;
+            newQuoteBtn.className = isQuoted ? 'product-modal-request-quote quoted' : 'product-modal-request-quote';
+            newQuoteBtn.innerHTML = `<i class="fab fa-whatsapp"></i> ${isQuoted ? `QUOTED (${quantity})` : 'REQUEST QUOTE'}`;
         }
     }
 
