@@ -1130,6 +1130,13 @@
             }
         });
 
+        document.getElementById('modalRequestQuote')?.addEventListener('click', () => {
+            if (currentModalProduct && !isProcessingClick) {
+                addToQuotation(currentModalProduct);
+                updateModalButtons();
+            }
+        });
+
         document.getElementById('closeModalBtn')?.addEventListener('click', closeProductModal);
         
         // History and keyboard events
