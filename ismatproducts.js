@@ -632,38 +632,37 @@
             } else {
                 cartBtn.style.display = 'inline-block';
                 cartBtn.disabled = false;
-                cartBtn.textContent = isAdded ? `IN CART (${quantity})` : 'ADD TO CART';
-                cartBtn.className = isAdded ? 'added' : '';
+                cartBtn.innerHTML = `<i class="fas fa-shopping-cart"></i> ${isAdded ? `IN CART (${quantity})` : 'ADD TO CART'}`;
+                cartBtn.className = isAdded ? 'product-modal-add-to-cart added' : 'product-modal-add-to-cart';
             }
         }
         
-        // Update/create quote button
-        let quoteBtn = document.getElementById('modalRequestQuote');
-        const modalActions = document.querySelector('.product-modal-actions');
-        
-        if (!quoteBtn && modalActions) {
-            quoteBtn = document.createElement('button');
-            quoteBtn.id = 'modalRequestQuote';
-            quoteBtn.className = 'product-modal-request-quote';
-            modalActions.appendChild(quoteBtn);
-            
-            // Attach event listener
-            quoteBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (currentModalProduct && !isProcessingClick) {
-                    addToQuotation(currentModalProduct);
-                    updateModalButtons();
-                }
-            });
-        }
-        
-        if (quoteBtn && currentModalProduct) {
+        // Update existing WhatsApp/Quote button
+        const whatsAppBtn = document.getElementById('modalWhatsAppBtn');
+        if (whatsAppBtn && currentModalProduct) {
             const isQuoted = isInQuotation(currentModalProduct.id, variantId);
             const quantity = getQuotationQuantity(currentModalProduct.id, variantId);
             
-            quoteBtn.className = isQuoted ? 'product-modal-request-quote quoted' : 'product-modal-request-quote';
-            quoteBtn.innerHTML = `<i class="fab fa-whatsapp"></i> ${isQuoted ? `QUOTED (${quantity})` : 'REQUEST QUOTE'}`;
+            // Update button text and class
+            whatsAppBtn.className = isQuoted ? 'product-modal-whatsapp-button quoted' : 'product-modal-whatsapp-button';
+            whatsAppBtn.innerHTML = `<i class="fab fa-whatsapp"></i> ${isQuoted ? `QUOTED (${quantity})` : 'GET QUOTE'}`;
+            
+            // Remove href to prevent navigation
+            whatsAppBtn.href = 'javascript:void(0)';
+            
+            // Ensure we have a fresh click handler
+            if (!whatsAppBtn.hasAttribute('data-quotation-handler')) {
+                whatsAppBtn.setAttribute('data-quotation-handler', 'true');
+                whatsAppBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Modal quote button clicked for:', currentModalProduct?.product_name);
+                    if (currentModalProduct && !isProcessingClick) {
+                        addToQuotation(currentModalProduct);
+                        updateModalButtons();
+                    }
+                });
+            }
         }
     }
 
@@ -1237,6 +1236,13 @@
         }
         .product-modal-request-quote:hover { background: #218838; }
         .product-modal-request-quote.quoted { background: #155724; }
+        
+        .product-modal-whatsapp-button.quoted {
+            background: #155724 !important;
+        }
+        .product-modal-whatsapp-button.quoted:hover {
+            background: #1e7e34 !important;
+        }
         
         .stock-indicator { font-size: 12px; padding: 4px 8px; border-radius: 4px; margin-bottom: 8px; }
         .stock-indicator.in-stock { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
