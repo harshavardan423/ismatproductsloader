@@ -553,7 +553,9 @@
         } else if (action === 'request-quote' && !isProcessingClick) {
             e.preventDefault();
             e.stopPropagation();
-            addToQuotation(product);
+            console.log('Request quote clicked for product:', product.product_name);
+            // Call the global function to ensure it works
+            window.addToQuotation(product);
         }
     }
 
@@ -892,7 +894,8 @@
                 quoteBtn.className = 'product-modal-request-quote';
                 quoteBtn.addEventListener('click', () => {
                     if (currentModalProduct) {
-                        addToQuotation(currentModalProduct);
+                        console.log('Modal quote button clicked');
+                        window.addToQuotation(currentModalProduct);
                         updateModalButtons();
                     }
                 });
@@ -1310,11 +1313,24 @@
 
         document.getElementById('closeModalBtn')?.addEventListener('click', closeProductModal);
         
-        // Quotation cart button
-        const quotationButton = document.getElementById('quotation-cart-button');
-        if (quotationButton) {
-            quotationButton.addEventListener('click', showQuotationCart);
+        // Quotation cart button - with retry mechanism
+        function attachQuotationButtonListener() {
+            const quotationButton = document.getElementById('quotation-cart-button');
+            if (quotationButton && !quotationButton.hasAttribute('data-quotation-listener')) {
+                quotationButton.setAttribute('data-quotation-listener', 'true');
+                quotationButton.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log('Quotation button clicked - opening sidebar');
+                    showQuotationCart();
+                });
+                console.log('Quotation button listener attached');
+            }
         }
+        
+        // Try immediately and also with delays for dynamic content
+        attachQuotationButtonListener();
+        setTimeout(attachQuotationButtonListener, 500);
+        setTimeout(attachQuotationButtonListener, 1000);
         
         // History and keyboard events
         window.addEventListener('popstate', (e) => {
@@ -1398,7 +1414,6 @@
         displayProductsInGrid: displayProducts,
         appendProductsToGrid: (products) => displayProducts(products, true),
         addToCart,
-        addToQuotation, // SAFE version that prevents auto-WhatsApp
         isInCart,
         isInQuotation,
         getCartQuantity,
@@ -1422,6 +1437,48 @@
         requestAllQuotes,
         getImageUrl
     });
+
+    // CRITICAL: Override window.addToQuotation to ensure it works globally
+    window.addToQuotation = function(product) {
+        console.log('Adding to quotation - NO WhatsApp will auto-open');
+        if (!product) return 0;
+        
+        // Use the global selectedVariant if available
+        const currentSelectedVariant = window.selectedVariant || selectedVariant || null;
+        
+        const existingItem = window.quotationItems.find(item => 
+            item.id === product.id && 
+            (item.selectedVariant?.name || null) === (currentSelectedVariant?.name || null)
+        );
+        
+        if (existingItem) {
+            existingItem.quantity += 1;
+        } else {
+            const price = product.offer_price || product.mrp || 0;
+            const finalPrice = currentSelectedVariant ? (currentSelectedVariant.price || price) : price;
+            
+            const newItem = {
+                id: product.id,
+                name: product.product_name,
+                price: parseFloat(finalPrice),
+                image: getImageUrl(product.product_image_urls && product.product_image_urls[0]),
+                category: product.category,
+                quantity: 1,
+                selectedVariant: currentSelectedVariant ? {
+                    name: currentSelectedVariant.name,
+                    price: currentSelectedVariant.price,
+                    sku: currentSelectedVariant.sku || product.sku
+                } : null
+            };
+            
+            window.quotationItems.push(newItem);
+        }
+        
+        updateQuotationButtonSafe();
+        updateModalButtons();
+        
+        return existingItem ? existingItem.quantity : 1;
+    };
 
     // Search integration
     window.onSearchComplete = (results, query) => {
@@ -1645,10 +1702,47 @@
         } catch (e) {}
         
         loadProducts(1, false);
-        updateQuotationButtonSafe();
+        initializeQuotationSystem();
         setTimeout(updateSearchIndicator, 500);
         
         console.log('Unified ISMAT Products & Quotation System loaded - WhatsApp auto-open prevention ACTIVE');
+    }
+
+    // Separate quotation system initialization for better timing
+    function initializeQuotationSystem() {
+        // Try multiple times to ensure quotation button gets attached
+        const maxAttempts = 5;
+        let attempts = 0;
+        
+        function tryAttachQuotationButton() {
+            const quotationButton = document.getElementById('quotation-cart-button');
+            
+            if (quotationButton && !quotationButton.hasAttribute('data-quotation-attached')) {
+                quotationButton.setAttribute('data-quotation-attached', 'true');
+                quotationButton.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Quotation cart button clicked - showing sidebar');
+                    showQuotationCart();
+                });
+                console.log('✅ Quotation button listener successfully attached');
+                updateQuotationButtonSafe();
+                return true;
+            }
+            
+            attempts++;
+            if (attempts < maxAttempts) {
+                console.log(`Quotation button not found, attempt ${attempts}/${maxAttempts}`);
+                setTimeout(tryAttachQuotationButton, 500);
+            } else {
+                console.warn('⚠️ Could not find quotation-cart-button after', maxAttempts, 'attempts');
+            }
+            
+            return false;
+        }
+        
+        tryAttachQuotationButton();
+        updateQuotationButtonSafe();
     }
 
     if (document.readyState === 'loading') {
@@ -1656,5 +1750,38 @@
     } else {
         setTimeout(init, 100);
     }
+
+    // Additional quotation system initialization - runs after main init
+    function ensureQuotationSystemWorks() {
+        // Make sure the functions are globally accessible
+        window.showQuotationCart = showQuotationCart;
+        window.updateQuotationButtonSafe = updateQuotationButtonSafe;
+        window.getQuotationItemsCount = getQuotationItemsCount;
+        
+        // Debug current state
+        console.log('Quotation items count:', getQuotationItemsCount());
+        console.log('Quotation button exists:', !!document.getElementById('quotation-cart-button'));
+        
+        // Update quotation button
+        updateQuotationButtonSafe();
+        
+        // Try to attach listener again if needed
+        const quotationButton = document.getElementById('quotation-cart-button');
+        if (quotationButton && !quotationButton.hasAttribute('data-quotation-attached')) {
+            quotationButton.setAttribute('data-quotation-attached', 'true');
+            quotationButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Quotation cart button clicked');
+                showQuotationCart();
+            });
+            console.log('✅ Quotation button attached successfully');
+        }
+    }
+
+    // Run quotation system initialization with multiple timings
+    setTimeout(ensureQuotationSystemWorks, 100);
+    setTimeout(ensureQuotationSystemWorks, 1000);
+    setTimeout(ensureQuotationSystemWorks, 2000);
 
 })();
