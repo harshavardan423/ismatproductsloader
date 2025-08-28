@@ -53,6 +53,54 @@
         filterOverlay = document.getElementById('filter-sidebar-overlay');
     }
 
+    function updateQuotationButton() {
+    const quotationButton = document.getElementById('quotation-cart-button');
+    if (!quotationButton) return;
+
+    const count = window.quotationItems.reduce((total, item) => total + item.quantity, 0);
+    
+    // Remove existing badge
+    const existingBadge = quotationButton.querySelector('.quotation-badge');
+    if (existingBadge) existingBadge.remove();
+
+    // Update data attribute
+    quotationButton.setAttribute('data-count', count);
+
+    // Update button text
+    const quotationText = quotationButton.querySelector('.quotation-text');
+    if (quotationText) {
+        quotationText.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
+    } else if (quotationButton.childNodes.length === 1 && quotationButton.childNodes[0].nodeType === 3) {
+        quotationButton.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
+    }
+
+    // Add badge if count > 0
+    if (count > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'quotation-badge';
+        badge.textContent = count;
+        badge.style.cssText = `
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #28a745;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            animation: quotationBadgePulse 0.3s ease-out;
+        `;
+        quotationButton.style.position = 'relative';
+        quotationButton.appendChild(badge);
+    }
+}
+
     // ===============================
     // UTILITY FUNCTIONS
     // ===============================
@@ -1062,6 +1110,15 @@
     // ===============================
 
     function setupEventListeners() {
+
+        const quotationButton = document.getElementById('quotation-cart-button');
+        if (quotationButton) {
+            quotationButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (window.showQuotationCart) window.showQuotationCart();
+            });
+        }
+
         // Filter events
         document.getElementById('product-filter-search')?.addEventListener('click', () => {
             filterSidebar?.classList.add('active');
