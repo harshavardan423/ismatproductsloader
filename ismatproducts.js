@@ -53,54 +53,6 @@
         filterOverlay = document.getElementById('filter-sidebar-overlay');
     }
 
-    function updateQuotationButton() {
-    const quotationButton = document.getElementById('quotation-cart-button');
-    if (!quotationButton) return;
-
-    const count = window.quotationItems.reduce((total, item) => total + item.quantity, 0);
-    
-    // Remove existing badge
-    const existingBadge = quotationButton.querySelector('.quotation-badge');
-    if (existingBadge) existingBadge.remove();
-
-    // Update data attribute
-    quotationButton.setAttribute('data-count', count);
-
-    // Update button text
-    const quotationText = quotationButton.querySelector('.quotation-text');
-    if (quotationText) {
-        quotationText.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
-    } else if (quotationButton.childNodes.length === 1 && quotationButton.childNodes[0].nodeType === 3) {
-        quotationButton.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
-    }
-
-    // Add badge if count > 0
-    if (count > 0) {
-        const badge = document.createElement('span');
-        badge.className = 'quotation-badge';
-        badge.textContent = count;
-        badge.style.cssText = `
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            background: #28a745;
-            color: white;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            font-size: 12px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10;
-            animation: quotationBadgePulse 0.3s ease-out;
-        `;
-        quotationButton.style.position = 'relative';
-        quotationButton.appendChild(badge);
-    }
-}
-
     // ===============================
     // UTILITY FUNCTIONS
     // ===============================
@@ -606,13 +558,14 @@
     }
 
     // ===============================
-    // MODAL FUNCTIONS (SIMPLIFIED)
+    // MODAL FUNCTIONS
     // ===============================
 
     function selectVariant(variantData) {
         if (variantData.stock_number <= 0) return;
         
         selectedVariant = variantData;
+        window.selectedVariant = variantData; // Export for other scripts
         
         document.querySelectorAll('.variant-option').forEach(option => option.classList.remove('selected'));
         const selected = document.querySelector(`.variant-option[data-variant-id="${variantData.name.replace(/"/g, '\\"')}"]`);
@@ -684,85 +637,41 @@
             }
         }
         
-        // Update quote button - IMPROVED VERSION with guaranteed event listener
+        // Update/create quote button
         let quoteBtn = document.getElementById('modalRequestQuote');
+        const modalActions = document.querySelector('.product-modal-actions');
         
-        // If button doesn't exist, create it
-        if (!quoteBtn) {
-            const modalActions = document.querySelector('.product-modal-actions');
-            if (modalActions) {
-                quoteBtn = document.createElement('button');
-                quoteBtn.id = 'modalRequestQuote';
-                quoteBtn.className = 'product-modal-request-quote';
-                modalActions.appendChild(quoteBtn);
-            }
-        }
-        
-        // Always ensure event listener is attached (handles both existing and new buttons)
-        if (quoteBtn && currentModalProduct) {
-            // Remove any existing listeners to prevent duplicates by cloning the button
-            const newQuoteBtn = quoteBtn.cloneNode(true);
-            quoteBtn.parentNode.replaceChild(newQuoteBtn, quoteBtn);
+        if (!quoteBtn && modalActions) {
+            quoteBtn = document.createElement('button');
+            quoteBtn.id = 'modalRequestQuote';
+            quoteBtn.className = 'product-modal-request-quote';
+            modalActions.appendChild(quoteBtn);
             
-            // Add fresh event listener
-            newQuoteBtn.addEventListener('click', () => {
+            // Attach event listener
+            quoteBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 if (currentModalProduct && !isProcessingClick) {
                     addToQuotation(currentModalProduct);
                     updateModalButtons();
                 }
             });
-            
-            // Update button text and state
+        }
+        
+        if (quoteBtn && currentModalProduct) {
             const isQuoted = isInQuotation(currentModalProduct.id, variantId);
             const quantity = getQuotationQuantity(currentModalProduct.id, variantId);
             
-            newQuoteBtn.className = isQuoted ? 'product-modal-request-quote quoted' : 'product-modal-request-quote';
-            newQuoteBtn.innerHTML = `<i class="fab fa-whatsapp"></i> ${isQuoted ? `QUOTED (${quantity})` : 'REQUEST QUOTE'}`;
+            quoteBtn.className = isQuoted ? 'product-modal-request-quote quoted' : 'product-modal-request-quote';
+            quoteBtn.innerHTML = `<i class="fab fa-whatsapp"></i> ${isQuoted ? `QUOTED (${quantity})` : 'REQUEST QUOTE'}`;
         }
     }
 
     function openProductModal(product) {
         currentModalProduct = product;
+        window.currentModalProduct = product; // Export for other scripts
         selectedVariant = null;
-        
-        if (!dom.modal) return;
-        
-        modalHistoryState = { modal: true, timestamp: Date.now() };
-        history.pushState(modalHistoryState, '', window.location.href);
-        isModalOpen = true;
-        
-        // Update modal content
-        const elements = {
-            title: document.getElementById('modalTitle'),
-            image: document.getElementById('modalImage'),
-            gallery: document.getElementById('imageGallery'),
-            productTitle: document.getElementById('modalProductTitle')
-        };
-        
-        if (elements.title) elements.title.textContent = 'Product Details';
-        if (elements.productTitle) elements.productTitle.textContent = product.product_name || 'Unnamed Product';
-        
-        // Handle images
-        const images = product.product_image_urls || [];
-        if (elements.image) {
-            elements.image.src = getImageUrl(images[0]);
-            elements.image.alt = product.product_name || 'Product image';
-        }
-        
-        if (elements.gallery) {
-            if (images.length > 1) {
-                elements.gallery.innerHTML = images.map((img, i) => 
-                    `<img src="${getImageUrl(img)}" class="gallery-thumbnail ${i === 0 ? 'active' : ''}" 
-                          onclick="changeMainImage('${img}', this)">`).join('');
-                elements.gallery.style.display = 'flex';
-            } else {
-                elements.gallery.style.display = 'none';
-            }
-        }
-        
-    function openProductModal(product) {
-        currentModalProduct = product;
-        selectedVariant = null;
+        window.selectedVariant = null; // Export for other scripts
         
         if (!dom.modal) return;
         
@@ -798,14 +707,13 @@
             }
         }
 
-        // Handle product descriptions - find description container more robustly
+        // Handle product descriptions
         let descriptionContainer = document.getElementById('modalDescription') || 
                                  document.getElementById('product-modal-description') ||
                                  document.querySelector('.product-modal-description') ||
                                  document.querySelector('.modal-description') ||
                                  document.querySelector('#productModal .description');
         
-        // If no description container found, create one
         if (!descriptionContainer) {
             const modalContent = document.querySelector('.product-modal-content');
             if (modalContent) {
@@ -813,7 +721,6 @@
                 descriptionContainer.id = 'modalDescription';
                 descriptionContainer.className = 'product-modal-description';
                 
-                // Insert after product title or at beginning
                 const productTitle = document.getElementById('modalProductTitle');
                 if (productTitle) {
                     productTitle.parentNode.insertBefore(descriptionContainer, productTitle.nextSibling);
@@ -876,7 +783,6 @@
                                 } else {
                                     tableHTML += '<tr>';
                                     cells.forEach(cell => {
-                                        // Handle markdown links [text](url)
                                         const processedCell = cell.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
                                         tableHTML += `<td>${processedCell}</td>`;
                                     });
@@ -1039,10 +945,10 @@
         document.body.style.overflow = 'auto';
         isModalOpen = false;
         currentModalProduct = null;
+        window.currentModalProduct = null;
         selectedVariant = null;
+        window.selectedVariant = null;
         modalHistoryState = null;
-        
-        updateModalButtons();
     }
 
     // ===============================
@@ -1110,15 +1016,6 @@
     // ===============================
 
     function setupEventListeners() {
-
-        const quotationButton = document.getElementById('quotation-cart-button');
-        if (quotationButton) {
-            quotationButton.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (window.showQuotationCart) window.showQuotationCart();
-            });
-        }
-
         // Filter events
         document.getElementById('product-filter-search')?.addEventListener('click', () => {
             filterSidebar?.classList.add('active');
@@ -1179,17 +1076,10 @@
             updateSearchIndicator();
         });
 
-        // Modal events
+        // Modal events - Cart button only (quotation button created dynamically)
         document.getElementById('modalAddToCart')?.addEventListener('click', () => {
             if (currentModalProduct && !isProcessingClick) {
                 addToCart(currentModalProduct);
-                updateModalButtons();
-            }
-        });
-
-        document.getElementById('modalRequestQuote')?.addEventListener('click', () => {
-            if (currentModalProduct && !isProcessingClick) {
-                addToQuotation(currentModalProduct);
                 updateModalButtons();
             }
         });
@@ -1303,7 +1193,11 @@
         },
         clearAllFiltersFromSidebar: applyFilters,
         refreshProductDisplay: updateModalButtons,
-        refreshQuoteDisplay: updateModalButtons
+        refreshQuoteDisplay: updateModalButtons,
+        // Export for quotation system
+        getImageUrl,
+        selectedVariant: () => selectedVariant,
+        currentModalProduct: () => currentModalProduct
     });
 
     // Search integration
