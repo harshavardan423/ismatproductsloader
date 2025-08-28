@@ -1,5 +1,5 @@
 // ===============================
-// OPTIMIZED PRODUCTS & FILTER SYSTEM
+// UNIFIED ISMAT PRODUCTS & QUOTATION SYSTEM
 // ===============================
 
 (function() {
@@ -160,14 +160,24 @@
             collection.push(newItem);
         }
         
-        const updateFn = window[`update${collectionType.charAt(0).toUpperCase() + collectionType.slice(1)}Button`];
-        updateFn?.();
+        // Update buttons safely without auto-opening WhatsApp
+        if (collectionType === 'quotation') {
+            updateQuotationButtonSafe();
+        } else {
+            const updateFn = window[`update${collectionType.charAt(0).toUpperCase() + collectionType.slice(1)}Button`];
+            updateFn?.();
+        }
         
         return existingItem ? existingItem.quantity : 1;
     }
 
     const addToCart = (product) => addToCollection(product, 'cart');
-    const addToQuotation = (product) => addToCollection(product, 'quotation');
+    
+    // SAFE quotation function that prevents auto-WhatsApp opening
+    const addToQuotation = (product) => {
+        console.log('Adding to quotation - NO WhatsApp will auto-open');
+        return addToCollection(product, 'quotation');
+    };
 
     const isInCollection = (productId, variantId, collectionType) => 
         window[`${collectionType}Items`].some(item => 
@@ -185,6 +195,233 @@
     const isInQuotation = (id, variant) => isInCollection(id, variant, 'quotation');
     const getCartQuantity = (id, variant) => getCollectionQuantity(id, variant, 'cart');
     const getQuotationQuantity = (id, variant) => getCollectionQuantity(id, variant, 'quotation');
+
+    // ===============================
+    // QUOTATION SYSTEM FUNCTIONS
+    // ===============================
+
+    function getQuotationItemsCount() {
+        return window.quotationItems.reduce((total, item) => total + item.quantity, 0);
+    }
+
+    // SAFE quotation button update - NO auto-WhatsApp
+    function updateQuotationButtonSafe() {
+        console.log('Safe quotation button update - NO WhatsApp will open');
+        
+        const quotationButton = document.getElementById('quotation-cart-button');
+        if (quotationButton) {
+            const count = getQuotationItemsCount();
+            
+            // Remove existing badge
+            const existingBadge = quotationButton.querySelector('.quotation-badge');
+            if (existingBadge) existingBadge.remove();
+            
+            quotationButton.setAttribute('data-count', count);
+            
+            const quotationText = quotationButton.querySelector('.quotation-text');
+            if (quotationText) {
+                quotationText.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
+            } else if (quotationButton.childNodes.length === 1 && quotationButton.childNodes[0].nodeType === 3) {
+                quotationButton.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
+            }
+            
+            if (count > 0) {
+                const badge = document.createElement('span');
+                badge.className = 'quotation-badge';
+                badge.textContent = count;
+                badge.style.cssText = `
+                    position: absolute; top: -8px; right: -8px; background: #28a745; color: white;
+                    border-radius: 50%; width: 20px; height: 20px; font-size: 12px; font-weight: bold;
+                    display: flex; align-items: center; justify-content: center; z-index: 10;
+                    animation: quotationBadgePulse 0.3s ease-out;
+                `;
+                
+                const currentPosition = window.getComputedStyle(quotationButton).position;
+                if (currentPosition === 'static') {
+                    quotationButton.style.position = 'relative';
+                }
+                
+                quotationButton.appendChild(badge);
+            }
+        }
+    }
+
+    function showQuotationCart() {
+        const quotationCart = document.createElement('div');
+        quotationCart.className = 'quotation-sidebar';
+        
+        const quotationItemsHTML = window.quotationItems.length > 0 ? 
+            window.quotationItems.map(item => `
+                <div class="quotation-item" data-product-id="${item.id}">
+                    <img src="${item.image || FALLBACK_IMG}" alt="${item.name}" class="quotation-item-image">
+                    <div class="quotation-item-details">
+                        <h4>${item.name}</h4>
+                        ${item.selectedVariant ? `<p class="variant-info">Variant: ${item.selectedVariant.name}</p>` : ''}
+                        <div class="quantity-controls">
+                            <button class="quantity-btn minus" data-product-id="${item.id}" ${item.quantity <= 1 ? 'disabled' : ''}>-</button>
+                            <span class="quantity">${item.quantity}</span>
+                            <button class="quantity-btn plus" data-product-id="${item.id}">+</button>
+                            <button class="remove-item" data-product-id="${item.id}">Remove</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('') : 
+            '<div class="empty-quotation">Your quotation list is empty</div>';
+
+        quotationCart.innerHTML = `
+            <div class="quotation-header">
+                <h2>Quotation Cart (${getQuotationItemsCount()} items)</h2>
+                <button class="close-quotation">&times;</button>
+            </div>
+            <div class="quotation-items">
+                ${quotationItemsHTML}
+            </div>
+            <div class="quotation-footer">
+                <button class="request-all-quotes" ${window.quotationItems.length === 0 ? 'disabled' : ''}>Request All Quotes via WhatsApp</button>
+            </div>
+        `;
+
+        document.body.appendChild(quotationCart);
+
+        // Add overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'quotation-overlay';
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5);
+            opacity: 0; visibility: hidden; transition: all 0.3s ease; z-index: 999;
+        `;
+        document.body.appendChild(overlay);
+
+        // Show quotation cart and overlay
+        setTimeout(() => {
+            quotationCart.classList.add('active');
+            overlay.style.opacity = '1';
+            overlay.style.visibility = 'visible';
+            document.body.style.overflow = 'hidden';
+        }, 10);
+
+        function updateQuotationDisplay() {
+            const quotationItemsContainer = quotationCart.querySelector('.quotation-items');
+            const requestButton = quotationCart.querySelector('.request-all-quotes');
+            const quotationHeader = quotationCart.querySelector('.quotation-header h2');
+
+            const quotationItemsHTML = window.quotationItems.length > 0 ? 
+                window.quotationItems.map(item => `
+                    <div class="quotation-item" data-product-id="${item.id}">
+                        <img src="${item.image || FALLBACK_IMG}" alt="${item.name}" class="quotation-item-image">
+                        <div class="quotation-item-details">
+                            <h4>${item.name}</h4>
+                            ${item.selectedVariant ? `<p class="variant-info">Variant: ${item.selectedVariant.name}</p>` : ''}
+                            <div class="quantity-controls">
+                                <button class="quantity-btn minus" data-product-id="${item.id}" ${item.quantity <= 1 ? 'disabled' : ''}>-</button>
+                                <span class="quantity">${item.quantity}</span>
+                                <button class="quantity-btn plus" data-product-id="${item.id}">+</button>
+                                <button class="remove-item" data-product-id="${item.id}">Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('') : 
+                '<div class="empty-quotation">Your quotation list is empty</div>';
+
+            quotationItemsContainer.innerHTML = quotationItemsHTML;
+            quotationHeader.textContent = `Quotation Cart (${getQuotationItemsCount()} items)`;
+            requestButton.disabled = window.quotationItems.length === 0;
+
+            attachQuotationEventListeners();
+            updateQuotationButtonSafe();
+        }
+
+        function attachQuotationEventListeners() {
+            // Quantity increase
+            quotationCart.querySelectorAll('.quantity-btn.plus').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const productId = parseInt(e.target.getAttribute('data-product-id'));
+                    const item = window.quotationItems.find(item => item.id === productId);
+                    if (item) {
+                        item.quantity++;
+                        updateQuotationDisplay();
+                    }
+                });
+            });
+
+            // Quantity decrease
+            quotationCart.querySelectorAll('.quantity-btn.minus').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const productId = parseInt(e.target.getAttribute('data-product-id'));
+                    const item = window.quotationItems.find(item => item.id === productId);
+                    if (item && item.quantity > 1) {
+                        item.quantity--;
+                        updateQuotationDisplay();
+                    }
+                });
+            });
+
+            // Remove item
+            quotationCart.querySelectorAll('.remove-item').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const productId = parseInt(e.target.getAttribute('data-product-id'));
+                    window.quotationItems = window.quotationItems.filter(item => item.id !== productId);
+                    updateQuotationDisplay();
+                    updateModalButtons(); // Update modal if open
+                });
+            });
+
+            // Request all quotes button - ONLY opens WhatsApp when user clicks this
+            const requestBtn = quotationCart.querySelector('.request-all-quotes');
+            if (requestBtn) {
+                requestBtn.addEventListener('click', () => {
+                    requestAllQuotes();
+                });
+            }
+        }
+
+        attachQuotationEventListeners();
+
+        const closeQuotationCart = () => {
+            quotationCart.classList.remove('active');
+            overlay.style.opacity = '0';
+            overlay.style.visibility = 'hidden';
+            document.body.style.overflow = 'auto';
+            setTimeout(() => {
+                if (document.body.contains(quotationCart)) document.body.removeChild(quotationCart);
+                if (document.body.contains(overlay)) document.body.removeChild(overlay);
+            }, 300);
+        };
+
+        quotationCart.querySelector('.close-quotation').addEventListener('click', closeQuotationCart);
+        overlay.addEventListener('click', closeQuotationCart);
+        
+        const escapeHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeQuotationCart();
+                document.removeEventListener('keydown', escapeHandler);
+            }
+        };
+        document.addEventListener('keydown', escapeHandler);
+    }
+
+    function requestAllQuotes() {
+        if (window.quotationItems.length === 0) {
+            alert('Your quotation cart is empty');
+            return;
+        }
+
+        const whatsappNumber = "917358223153";
+        
+        let message = "Hi, I would like to request quotes for the following products:\n\n";
+        
+        window.quotationItems.forEach((item, index) => {
+            const variantText = item.selectedVariant ? ` (${item.selectedVariant.name})` : '';
+            message += `${index + 1}. ${item.name}${variantText} - Quantity: ${item.quantity}\n`;
+        });
+        
+        message += "\nPlease provide your best quotes for these items. Thank you!";
+        
+        const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
+        
+        console.log('Opening WhatsApp only because user clicked "Request All Quotes" button');
+        window.open(whatsappUrl, '_blank');
+    }
 
     // ===============================
     // PRODUCT CARD & DISPLAY
@@ -557,14 +794,21 @@
         resultDisplay.textContent = text;
     }
 
+    function closeFilterSidebar() {
+        filterSidebar?.classList.remove('active');
+        filterOverlay?.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
     // ===============================
-    // MODAL FUNCTIONS (SIMPLIFIED)
+    // MODAL FUNCTIONS
     // ===============================
 
     function selectVariant(variantData) {
         if (variantData.stock_number <= 0) return;
         
         selectedVariant = variantData;
+        window.selectedVariant = selectedVariant; // Make globally accessible
         
         document.querySelectorAll('.variant-option').forEach(option => option.classList.remove('selected'));
         const selected = document.querySelector(`.variant-option[data-variant-id="${variantData.name.replace(/"/g, '\\"')}"]`);
@@ -616,11 +860,13 @@
     }
 
     function updateModalButtons() {
+        if (!currentModalProduct) return;
+        
         const variantId = selectedVariant?.name || null;
         
         // Update cart button
         const cartBtn = document.getElementById('modalAddToCart');
-        if (cartBtn && currentModalProduct) {
+        if (cartBtn) {
             const isAdded = isInCart(currentModalProduct.id, variantId);
             const quantity = getCartQuantity(currentModalProduct.id, variantId);
             const stockNumber = selectedVariant?.stock_number || currentModalProduct.stock_number;
@@ -636,24 +882,29 @@
             }
         }
         
-        // Update quote button
-        const quoteBtn = document.getElementById('modalRequestQuote') || (() => {
+        // Update quote button - create if doesn't exist
+        let quoteBtn = document.getElementById('modalRequestQuote');
+        if (!quoteBtn) {
             const modalActions = document.querySelector('.product-modal-actions');
-            if (!modalActions) return null;
-            
-            const btn = document.createElement('button');
-            btn.id = 'modalRequestQuote';
-            btn.className = 'product-modal-request-quote';
-            btn.addEventListener('click', () => addToQuotation(currentModalProduct));
-            modalActions.appendChild(btn);
-            return btn;
-        })();
+            if (modalActions) {
+                quoteBtn = document.createElement('button');
+                quoteBtn.id = 'modalRequestQuote';
+                quoteBtn.className = 'product-modal-request-quote';
+                quoteBtn.addEventListener('click', () => {
+                    if (currentModalProduct) {
+                        addToQuotation(currentModalProduct);
+                        updateModalButtons();
+                    }
+                });
+                modalActions.appendChild(quoteBtn);
+            }
+        }
         
-        if (quoteBtn && currentModalProduct) {
+        if (quoteBtn) {
             const isQuoted = isInQuotation(currentModalProduct.id, variantId);
             const quantity = getQuotationQuantity(currentModalProduct.id, variantId);
             
-            quoteBtn.className = isQuoted ? 'quoted' : '';
+            quoteBtn.className = isQuoted ? 'product-modal-request-quote quoted' : 'product-modal-request-quote';
             quoteBtn.innerHTML = `<i class="fab fa-whatsapp"></i> ${isQuoted ? `QUOTED (${quantity})` : 'REQUEST QUOTE'}`;
         }
     }
@@ -661,6 +912,7 @@
     function openProductModal(product) {
         currentModalProduct = product;
         selectedVariant = null;
+        window.selectedVariant = null;
         
         if (!dom.modal) return;
         
@@ -696,53 +948,14 @@
                 elements.gallery.style.display = 'none';
             }
         }
-        
-    function openProductModal(product) {
-        currentModalProduct = product;
-        selectedVariant = null;
-        
-        if (!dom.modal) return;
-        
-        modalHistoryState = { modal: true, timestamp: Date.now() };
-        history.pushState(modalHistoryState, '', window.location.href);
-        isModalOpen = true;
-        
-        // Update modal title and product name
-        const titleElement = document.getElementById('modalTitle');
-        const productTitleElement = document.getElementById('modalProductTitle');
-        
-        if (titleElement) titleElement.textContent = 'Product Details';
-        if (productTitleElement) productTitleElement.textContent = product.product_name || 'Unnamed Product';
-        
-        // Handle main image and gallery
-        const modalImage = document.getElementById('modalImage');
-        const imageGallery = document.getElementById('imageGallery');
-        const images = product.product_image_urls || [];
-        
-        if (modalImage) {
-            modalImage.src = getImageUrl(images[0]);
-            modalImage.alt = product.product_name || 'Product image';
-        }
-        
-        if (imageGallery) {
-            if (images.length > 1) {
-                imageGallery.innerHTML = images.map((img, i) => 
-                    `<img src="${getImageUrl(img)}" class="gallery-thumbnail ${i === 0 ? 'active' : ''}" 
-                          onclick="changeMainImage('${img}', this)">`).join('');
-                imageGallery.style.display = 'flex';
-            } else {
-                imageGallery.style.display = 'none';
-            }
-        }
 
-        // Handle product descriptions - find description container more robustly
+        // Handle product descriptions
         let descriptionContainer = document.getElementById('modalDescription') || 
                                  document.getElementById('product-modal-description') ||
                                  document.querySelector('.product-modal-description') ||
                                  document.querySelector('.modal-description') ||
                                  document.querySelector('#productModal .description');
         
-        // If no description container found, create one
         if (!descriptionContainer) {
             const modalContent = document.querySelector('.product-modal-content');
             if (modalContent) {
@@ -750,7 +963,6 @@
                 descriptionContainer.id = 'modalDescription';
                 descriptionContainer.className = 'product-modal-description';
                 
-                // Insert after product title or at beginning
                 const productTitle = document.getElementById('modalProductTitle');
                 if (productTitle) {
                     productTitle.parentNode.insertBefore(descriptionContainer, productTitle.nextSibling);
@@ -763,7 +975,6 @@
         if (descriptionContainer) {
             let descContent = '';
             
-            // Short description
             if (product.short_description?.trim()) {
                 descContent += `<div class="short-description">
                     <h4>Description</h4>
@@ -771,7 +982,6 @@
                 </div>`;
             }
             
-            // Long description (if different from short)
             if (product.long_description?.trim() && product.long_description !== product.short_description) {
                 descContent += `<div class="long-description">
                     <h4>Detailed Description</h4>
@@ -779,7 +989,6 @@
                 </div>`;
             }
             
-            // Basic product info
             const basicInfo = [];
             if (product.sku) basicInfo.push(`<span><strong>SKU:</strong> ${product.sku}</span>`);
             if (product.manufacturer) basicInfo.push(`<span><strong>Manufacturer:</strong> ${product.manufacturer}</span>`);
@@ -792,7 +1001,6 @@
                 </div>`;
             }
             
-            // Technical information table
             if (product.technical_information?.trim()) {
                 const techInfo = product.technical_information.replace(/\\n/g, '\n');
                 
@@ -802,7 +1010,7 @@
                         let tableHTML = '<div class="technical-specifications"><h4>Technical Specifications</h4><table class="specs-table">';
                         
                         lines.forEach((line, index) => {
-                            if (index === 1 && line.includes('---')) return; // Skip separator
+                            if (index === 1 && line.includes('---')) return;
                             
                             const cells = line.split('|').map(cell => cell.trim()).filter(cell => cell);
                             if (cells.length >= 2) {
@@ -813,7 +1021,6 @@
                                 } else {
                                     tableHTML += '<tr>';
                                     cells.forEach(cell => {
-                                        // Handle markdown links [text](url)
                                         const processedCell = cell.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
                                         tableHTML += `<td>${processedCell}</td>`;
                                     });
@@ -833,7 +1040,6 @@
                 }
             }
             
-            // Special notes
             if (product.special_note?.trim()) {
                 descContent += `<div class="special-note">
                     <h4>Important Notes</h4>
@@ -843,7 +1049,6 @@
                 </div>`;
             }
             
-            // Dimensions if available
             const dimensions = [];
             if (product.length) dimensions.push(`Length: ${product.length}${product.dimension_unit || 'mm'}`);
             if (product.width) dimensions.push(`Width: ${product.width}${product.dimension_unit || 'mm'}`);
@@ -856,7 +1061,6 @@
                 </div>`;
             }
             
-            // If we have content, show it; otherwise show minimal placeholder
             if (descContent.trim()) {
                 descriptionContainer.innerHTML = descContent;
             } else {
@@ -864,13 +1068,12 @@
                     <div class="minimal-info">
                         <h4>Product Details</h4>
                         <p>${product.product_name || 'Product details not available'}</p>
-                    </div>
-                `;
+                    </div>`;
             }
             descriptionContainer.style.display = 'block';
         }
 
-        // Handle video links section
+        // Handle video links
         const videoContainer = document.getElementById('modalVideoContainer');
         if (videoContainer) {
             let videoContent = '';
@@ -899,7 +1102,7 @@
             videoContainer.style.display = 'block';
         }
 
-        // Handle PDF downloads section
+        // Handle PDF downloads
         const pdfContainer = document.getElementById('modalPdfContainer');
         if (pdfContainer) {
             let pdfContent = '';
@@ -977,6 +1180,7 @@
         isModalOpen = false;
         currentModalProduct = null;
         selectedVariant = null;
+        window.selectedVariant = null;
         modalHistoryState = null;
         
         updateModalButtons();
@@ -1055,17 +1259,8 @@
             if (!isFilterOptionsLoaded) loadFilterOptions();
         });
 
-        document.getElementById('close-filter-sidebar')?.addEventListener('click', () => {
-            filterSidebar?.classList.remove('active');
-            filterOverlay?.classList.remove('active');
-            document.body.style.overflow = '';
-        });
-
-        filterOverlay?.addEventListener('click', () => {
-            filterSidebar?.classList.remove('active');
-            filterOverlay?.classList.remove('active');
-            document.body.style.overflow = '';
-        });
+        document.getElementById('close-filter-sidebar')?.addEventListener('click', closeFilterSidebar);
+        filterOverlay?.addEventListener('click', closeFilterSidebar);
 
         // Search events
         const searchBtn = document.getElementById('search-products-btn');
@@ -1101,9 +1296,7 @@
             window.isFilterSystemActive = false;
             window.searchResults = null;
             window.onSearchClear?.();
-            filterSidebar?.classList.remove('active');
-            filterOverlay?.classList.remove('active');
-            document.body.style.overflow = '';
+            closeFilterSidebar();
             updateSearchIndicator();
         });
 
@@ -1117,6 +1310,12 @@
 
         document.getElementById('closeModalBtn')?.addEventListener('click', closeProductModal);
         
+        // Quotation cart button
+        const quotationButton = document.getElementById('quotation-cart-button');
+        if (quotationButton) {
+            quotationButton.addEventListener('click', showQuotationCart);
+        }
+        
         // History and keyboard events
         window.addEventListener('popstate', (e) => {
             if (isModalOpen) {
@@ -1129,11 +1328,7 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 if (isModalOpen) closeProductModal();
-                else if (filterSidebar?.classList.contains('active')) {
-                    filterSidebar.classList.remove('active');
-                    filterOverlay?.classList.remove('active');
-                    document.body.style.overflow = '';
-                }
+                else if (filterSidebar?.classList.contains('active')) closeFilterSidebar();
             }
         });
 
@@ -1182,14 +1377,10 @@
     // GLOBAL EXPORTS & INITIALIZATION
     // ===============================
 
-    // Export essential functions
+    // Export essential functions with SAFE quotation handling
     Object.assign(window, {
         openFilterSidebar: () => applyFilters(),
-        closeFilterSidebar: () => {
-            filterSidebar?.classList.remove('active');
-            filterOverlay?.classList.remove('active');
-            document.body.style.overflow = '';
-        },
+        closeFilterSidebar,
         updateSearchIndicator,
         loadMoreProducts: () => loadProducts(currentPage + 1, true),
         openProductModal,
@@ -1207,13 +1398,15 @@
         displayProductsInGrid: displayProducts,
         appendProductsToGrid: (products) => displayProducts(products, true),
         addToCart,
-        addToQuotation,
+        addToQuotation, // SAFE version that prevents auto-WhatsApp
         isInCart,
         isInQuotation,
         getCartQuantity,
         getQuotationQuantity,
+        getQuotationItemsCount,
         updateModalCartButton: updateModalButtons,
         updateModalQuoteButton: updateModalButtons,
+        updateQuotationButton: updateQuotationButtonSafe, // SAFE version
         createProductCard,
         clearSearchInput: () => {
             if (dom.searchInput) dom.searchInput.value = '';
@@ -1224,7 +1417,10 @@
         },
         clearAllFiltersFromSidebar: applyFilters,
         refreshProductDisplay: updateModalButtons,
-        refreshQuoteDisplay: updateModalButtons
+        refreshQuoteDisplay: updateModalButtons,
+        showQuotationCart,
+        requestAllQuotes,
+        getImageUrl
     });
 
     // Search integration
@@ -1242,111 +1438,201 @@
         loadProducts(1, false, false);
     };
 
-    // Add styles
-    const style = document.createElement('style');
-    style.textContent = `
-        .cart-actions-container { display: flex; gap: 8px; margin-top: 10px; align-items: stretch; }
-        .cart-actions-container.quote-only { justify-content: center; }
-        .cart-actions-container.quote-only .request-quote { flex: 1; }
-        @media (max-width: 768px) { .cart-actions-container { flex-direction: column; } }
-        
-        .request-quote { 
-            color: white; padding: 12px; border: none; border-radius: 28px; cursor: pointer; 
-            font-size: 14px; background: #128c7e; display: inline-flex; align-items: center; 
-            justify-content: center; gap: 6px; min-height: 44px; transition: background-color 0.3s; 
-        }
-        .request-quote:hover { background: #218838; }
-        .request-quote.quoted { background: #155724; }
-        
-        .product-modal-request-quote { 
-            padding: 15px; background: #28a745; color: white; border: none; border-radius: 4px; 
-            cursor: pointer; font-size: 16px; margin-left: 10px; transition: background-color 0.3s; 
-        }
-        .product-modal-request-quote:hover { background: #218838; }
-        .product-modal-request-quote.quoted { background: #155724; }
-        
-        .stock-indicator { font-size: 12px; padding: 4px 8px; border-radius: 4px; margin-bottom: 8px; }
-        .stock-indicator.in-stock { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .stock-indicator.low-stock { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
-        .stock-indicator.out-of-stock { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        
-        .add-to-cart, .request-quote { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-        .product-card-content { cursor: pointer; }
-        
-        /* Modal Description Styles */
-        .short-description, .long-description, .basic-product-info, .technical-specifications, .special-note { 
-            margin-bottom: 20px; 
-        }
-        .short-description h4, .long-description h4, .basic-product-info h4, .technical-specifications h4, .special-note h4 { 
-            margin: 0 0 10px 0; color: #333; font-size: 16px; 
-        }
-        .info-grid { 
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; 
-        }
-        .info-grid span { 
-            padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 14px; 
-        }
-        .specs-table { 
-            width: 100%; border-collapse: collapse; margin-top: 10px; 
-        }
-        .specs-table th, .specs-table td { 
-            padding: 8px 12px; border: 1px solid #ddd; text-align: left; 
-        }
-        .specs-table th { 
-            background: #f8f9fa; font-weight: 600; 
-        }
-        .specs-table tr:nth-child(even) { 
-            background: #f9f9f9; 
-        }
-        .specs-table a { 
-            color: #007bff; text-decoration: none; 
-        }
-        .specs-table a:hover { 
-            text-decoration: underline; 
-        }
-        .special-note .note-content { 
-            padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px; 
-        }
-        .no-description { 
-            text-align: center; color: #666; padding: 20px; 
-        }
-        .video-section, .pdf-section { 
-            margin-bottom: 15px; 
-        }
-        .video-section h4, .pdf-section h4 { 
-            margin: 0 0 10px 0; color: #333; font-size: 16px; 
-        }
-        .youtube-video-container { 
-            position: relative; display: inline-block; margin: 10px 0; 
-        }
-        .youtube-thumbnail { 
-            width: 100%; max-width: 300px; border-radius: 8px; 
-        }
-        .youtube-play-overlay { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            background: rgba(0,0,0,0.8); border-radius: 50%; width: 50px; height: 50px; 
-            display: flex; align-items: center; justify-content: center; 
-        }
-        .youtube-play-icon { 
-            width: 0; height: 0; border-left: 15px solid white; 
-            border-top: 10px solid transparent; border-bottom: 10px solid transparent; margin-left: 3px; 
-        }
-        .youtube-video-title { 
-            margin-top: 5px; font-size: 14px; color: #333; 
-        }
-        .pdf-download-link, .youtube-search-link { 
-            display: inline-block; padding: 10px 15px; background: #dc3545; color: white; 
-            text-decoration: none; border-radius: 5px; margin: 5px 5px 5px 0; 
-        }
-        .pdf-download-link:hover, .youtube-search-link:hover { 
-            background: #c82333; color: white; 
-        }
-    `;
-    document.head.appendChild(style);
+    // ===============================
+    // STYLES
+    // ===============================
+
+    function addStyles() {
+        const style = document.createElement('style');
+        style.textContent = `
+            /* Core Product & Cart Styles */
+            .cart-actions-container { display: flex; gap: 8px; margin-top: 10px; align-items: stretch; }
+            .cart-actions-container.quote-only { justify-content: center; }
+            .cart-actions-container.quote-only .request-quote { flex: 1; }
+            @media (max-width: 768px) { .cart-actions-container { flex-direction: column; } }
+            
+            .request-quote { 
+                color: white; padding: 12px; border: none; border-radius: 28px; cursor: pointer; 
+                font-size: 14px; background: #128c7e; display: inline-flex; align-items: center; 
+                justify-content: center; gap: 6px; min-height: 44px; transition: background-color 0.3s; 
+            }
+            .request-quote:hover { background: #218838; }
+            .request-quote.quoted { background: #155724; }
+            
+            .product-modal-request-quote { 
+                padding: 15px; background: #28a745; color: white; border: none; border-radius: 4px; 
+                cursor: pointer; font-size: 16px; margin-left: 10px; transition: background-color 0.3s; 
+            }
+            .product-modal-request-quote:hover { background: #218838; }
+            .product-modal-request-quote.quoted { background: #155724; }
+            
+            .stock-indicator { font-size: 12px; padding: 4px 8px; border-radius: 4px; margin-bottom: 8px; }
+            .stock-indicator.in-stock { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+            .stock-indicator.low-stock { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+            .stock-indicator.out-of-stock { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+            
+            .add-to-cart, .request-quote { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+            .product-card-content { cursor: pointer; }
+            
+            /* Quotation Badge Animation */
+            @keyframes quotationBadgePulse {
+                0% { transform: scale(0); }
+                50% { transform: scale(1.2); }
+                100% { transform: scale(1); }
+            }
+            
+            #quotation-cart-button { position: relative !important; }
+            #quotation-cart-button[data-count="0"] .quotation-badge { display: none !important; }
+            .quotation-badge { pointer-events: none; }
+            
+            /* Quotation Sidebar Styles */
+            .quotation-sidebar {
+                position: fixed; top: 0; right: -400px; width: 400px; height: 100%; background: white;
+                box-shadow: -2px 0 5px rgba(0,0,0,0.1); transition: right 0.3s ease; z-index: 1000;
+                box-sizing: border-box; display: flex; flex-direction: column; border-left: 3px solid #28a745;
+            }
+            .quotation-sidebar.active { right: 0; }
+            .quotation-header {
+                display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee;
+                padding: 20px; margin-bottom: 20px;
+            }
+            .quotation-header h2 { margin: 0; font-size: 18px; color: #28a745; }
+            .close-quotation {
+                background: none; border: none; font-size: 24px; cursor: pointer; color: #666;
+                width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+                border-radius: 50%; transition: background-color 0.2s;
+            }
+            .close-quotation:hover { background: #f0f0f0; }
+            .quotation-items { flex: 1; overflow-y: auto; margin-bottom: 20px; }
+            .quotation-item {
+                display: flex; align-items: flex-start; gap: 15px; margin-bottom: 20px;
+                border-bottom: 1px solid #eee; padding-bottom: 15px; padding: 20px;
+            }
+            .quotation-item:last-child { border-bottom: none; }
+            .quotation-item-image {
+                width: 60px; height: 60px; object-fit: cover; border-radius: 28px; flex-shrink: 0;
+            }
+            .quotation-item-details { flex: 1; }
+            .quotation-item h4 {
+                margin: 0 0 5px 0; font-size: 16px; line-height: 1.3; color: #333;
+            }
+            .quotation-item .variant-info {
+                margin: 0 0 5px 0; font-size: 13px; color: #666; font-style: italic;
+            }
+            .quantity-controls {
+                display: flex; align-items: left; gap: 10px; margin-top: 20px;
+            }
+            .quantity-btn {
+                width: 30px; height: 30px; border: 1px solid #ddd; background: white; cursor: pointer;
+                border-radius: 28px; display: flex; align-items: center; justify-content: center;
+                font-size: 14px; transition: all 0.2s;
+            }
+            .quantity-btn:hover { background: #f0f0f0; border-color: #28a745; }
+            .quantity-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+            .quantity {
+                font-weight: bold; min-width: 30px; text-align: center; padding: 5px;
+            }
+            .remove-item {
+                background: #dc2626; color: white; border: none; padding: 5px 10px;
+                border-radius: 28px; cursor: pointer; font-size: 12px; transition: background-color 0.2s;
+            }
+            .remove-item:hover { background: #b91c1c; }
+            .empty-quotation {
+                text-align: center; color: #666; font-style: italic; padding: 40px 20px;
+            }
+            .quotation-footer { border-top: 1px solid #eee; padding: 20px; }
+            .request-all-quotes {
+                width: fit-content; padding: 15px; background: #25d366; color: white;
+                border: none; border-radius: 28px; cursor: pointer; font-size: 16px;
+                font-weight: 500; transition: background-color 0.2s;
+            }
+            .request-all-quotes:hover:not(:disabled) { background: #128c7e; }
+            .request-all-quotes:disabled { background: #6c757d; cursor: not-allowed; }
+            
+            /* Modal Description Styles */
+            .short-description, .long-description, .basic-product-info, .technical-specifications, .special-note { 
+                margin-bottom: 20px; 
+            }
+            .short-description h4, .long-description h4, .basic-product-info h4, .technical-specifications h4, .special-note h4 { 
+                margin: 0 0 10px 0; color: #333; font-size: 16px; 
+            }
+            .info-grid { 
+                display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; 
+            }
+            .info-grid span { 
+                padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 14px; 
+            }
+            .specs-table { 
+                width: 100%; border-collapse: collapse; margin-top: 10px; 
+            }
+            .specs-table th, .specs-table td { 
+                padding: 8px 12px; border: 1px solid #ddd; text-align: left; 
+            }
+            .specs-table th { 
+                background: #f8f9fa; font-weight: 600; 
+            }
+            .specs-table tr:nth-child(even) { 
+                background: #f9f9f9; 
+            }
+            .specs-table a { 
+                color: #007bff; text-decoration: none; 
+            }
+            .specs-table a:hover { 
+                text-decoration: underline; 
+            }
+            .special-note .note-content { 
+                padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px; 
+            }
+            .video-section, .pdf-section { 
+                margin-bottom: 15px; 
+            }
+            .video-section h4, .pdf-section h4 { 
+                margin: 0 0 10px 0; color: #333; font-size: 16px; 
+            }
+            .youtube-video-container { 
+                position: relative; display: inline-block; margin: 10px 0; 
+            }
+            .youtube-thumbnail { 
+                width: 100%; max-width: 300px; border-radius: 8px; 
+            }
+            .youtube-play-overlay { 
+                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                background: rgba(0,0,0,0.8); border-radius: 50%; width: 50px; height: 50px; 
+                display: flex; align-items: center; justify-content: center; 
+            }
+            .youtube-play-icon { 
+                width: 0; height: 0; border-left: 15px solid white; 
+                border-top: 10px solid transparent; border-bottom: 10px solid transparent; margin-left: 3px; 
+            }
+            .youtube-video-title { 
+                margin-top: 5px; font-size: 14px; color: #333; 
+            }
+            .pdf-download-link, .youtube-search-link { 
+                display: inline-block; padding: 10px 15px; background: #dc3545; color: white; 
+                text-decoration: none; border-radius: 5px; margin: 5px 5px 5px 0; 
+            }
+            .pdf-download-link:hover, .youtube-search-link:hover { 
+                background: #c82333; color: white; 
+            }
+            
+            @media (max-width: 480px) {
+                .quotation-sidebar {
+                    width: 100%; right: -100%;
+                }
+                .quotation-item {
+                    flex-direction: column; align-items: flex-start;
+                }
+                .quotation-item-image { align-self: start; }
+                .quantity-controls { justify-content: start; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
 
     // Initialize
     function init() {
         cacheElements();
+        addStyles();
         setupEventListeners();
         setupInfiniteScroll();
         
@@ -1359,7 +1645,10 @@
         } catch (e) {}
         
         loadProducts(1, false);
+        updateQuotationButtonSafe();
         setTimeout(updateSearchIndicator, 500);
+        
+        console.log('Unified ISMAT Products & Quotation System loaded - WhatsApp auto-open prevention ACTIVE');
     }
 
     if (document.readyState === 'loading') {
