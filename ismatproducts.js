@@ -2,20 +2,336 @@
 // UNIFIED ISMAT PRODUCTS & QUOTATION SYSTEM
 // ===============================
 
+// Initialize global quotation storage immediately
+window.quotationItems = window.quotationItems || [];
+window.cartItems = window.cartItems || [];
+
+// ===============================
+// CONSTANTS & CONFIGURATION
+// ===============================
+
+const BASE_URL = 'https://admin.ismatindia.com:7000';
+const FALLBACK_IMG = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0xMDAgNzBWMTMwTTcwIDEwMEgxMzAiIHN0cm9rZT0iI0NDQ0NDQyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPC9zdmc+';
+
+// ===============================
+// QUOTATION SYSTEM - DIRECT GLOBAL FUNCTIONS
+// ===============================
+
+// Function to get quotation items count
+window.getQuotationItemsCount = function() {
+    return window.quotationItems.reduce((total, item) => total + item.quantity, 0);
+};
+
+// Function to check if item is in quotation
+window.isInQuotation = function(productId, variantId = null) {
+    return window.quotationItems.some(item => 
+        item.id === productId && 
+        (item.selectedVariant?.name || null) === variantId
+    );
+};
+
+// Function to get item quantity in quotation
+window.getQuotationQuantity = function(productId, variantId = null) {
+    const item = window.quotationItems.find(item => 
+        item.id === productId && 
+        (item.selectedVariant?.name || null) === variantId
+    );
+    return item ? item.quantity : 0;
+};
+
+// SAFE Function to update quotation button - NO AUTO WHATSAPP
+window.updateQuotationButtonSafe = function() {
+    console.log('Updating quotation button - count:', window.getQuotationItemsCount());
+    
+    const quotationButton = document.getElementById('quotation-cart-button');
+    if (quotationButton) {
+        const count = window.getQuotationItemsCount();
+        
+        // Remove existing badge
+        const existingBadge = quotationButton.querySelector('.quotation-badge');
+        if (existingBadge) {
+            existingBadge.remove();
+        }
+        
+        quotationButton.setAttribute('data-count', count);
+        
+        const quotationText = quotationButton.querySelector('.quotation-text');
+        if (quotationText) {
+            quotationText.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
+        } else if (quotationButton.childNodes.length === 1 && quotationButton.childNodes[0].nodeType === 3) {
+            quotationButton.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
+        }
+        
+        if (count > 0) {
+            const badge = document.createElement('span');
+            badge.className = 'quotation-badge';
+            badge.textContent = count;
+            badge.style.cssText = `
+                position: absolute; top: -8px; right: -8px; background: #28a745; color: white;
+                border-radius: 50%; width: 20px; height: 20px; font-size: 12px; font-weight: bold;
+                display: flex; align-items: center; justify-content: center; z-index: 10;
+                animation: quotationBadgePulse 0.3s ease-out;
+            `;
+            
+            const currentPosition = window.getComputedStyle(quotationButton).position;
+            if (currentPosition === 'static') {
+                quotationButton.style.position = 'relative';
+            }
+            
+            quotationButton.appendChild(badge);
+        }
+    } else {
+        console.log('Quotation button not found during update');
+    }
+};
+
+// MAIN QUOTATION FUNCTION - DIRECT GLOBAL
+window.addToQuotation = function(product) {
+    console.log('ADD TO QUOTATION CALLED for:', product?.product_name);
+    
+    if (!product) {
+        console.log('No product provided');
+        return 0;
+    }
+    
+    // Get selectedVariant from global scope if it exists
+    const selectedVariant = window.selectedVariant || null;
+    
+    const existingItem = window.quotationItems.find(item => 
+        item.id === product.id && 
+        (item.selectedVariant?.name || null) === (selectedVariant?.name || null)
+    );
+    
+    if (existingItem) {
+        existingItem.quantity += 1;
+        console.log('Updated existing quotation item, new quantity:', existingItem.quantity);
+    } else {
+        const price = product.offer_price || product.mrp || 0;
+        const finalPrice = selectedVariant ? (selectedVariant.price || price) : price;
+        
+        const newItem = {
+            id: product.id,
+            name: product.product_name,
+            price: parseFloat(finalPrice),
+            image: window.getImageUrl ? window.getImageUrl(product.product_image_urls && product.product_image_urls[0]) : (product.product_image_urls && product.product_image_urls[0]),
+            category: product.category,
+            quantity: 1,
+            selectedVariant: selectedVariant ? {
+                name: selectedVariant.name,
+                price: selectedVariant.price,
+                sku: selectedVariant.sku || product.sku
+            } : null
+        };
+        
+        window.quotationItems.push(newItem);
+        console.log('Added new item to quotation:', newItem.name);
+    }
+    
+    // Update the button safely
+    window.updateQuotationButtonSafe();
+    
+    // Update modal buttons if modal is open
+    if (window.updateModalButtons) {
+        window.updateModalButtons();
+    }
+    
+    console.log('Total quotation items now:', window.getQuotationItemsCount());
+    return existingItem ? existingItem.quantity : 1;
+};
+
+// Function to show quotation cart - DIRECT GLOBAL
+window.showQuotationCart = function() {
+    console.log('SHOW QUOTATION CART CALLED');
+    console.log('Items in quotation:', window.quotationItems.length);
+    
+    const quotationCart = document.createElement('div');
+    quotationCart.className = 'quotation-sidebar';
+    
+    const quotationItemsHTML = window.quotationItems.length > 0 ? 
+        window.quotationItems.map(item => `
+            <div class="quotation-item" data-product-id="${item.id}">
+                <img src="${item.image || FALLBACK_IMG}" alt="${item.name}" class="quotation-item-image">
+                <div class="quotation-item-details">
+                    <h4>${item.name}</h4>
+                    ${item.selectedVariant ? `<p class="variant-info">Variant: ${item.selectedVariant.name}</p>` : ''}
+                    <div class="quantity-controls">
+                        <button class="quantity-btn minus" data-product-id="${item.id}" ${item.quantity <= 1 ? 'disabled' : ''}>-</button>
+                        <span class="quantity">${item.quantity}</span>
+                        <button class="quantity-btn plus" data-product-id="${item.id}">+</button>
+                        <button class="remove-item" data-product-id="${item.id}">Remove</button>
+                    </div>
+                </div>
+            </div>
+        `).join('') : 
+        '<div class="empty-quotation">Your quotation list is empty</div>';
+
+    quotationCart.innerHTML = `
+        <div class="quotation-header">
+            <h2>Quotation Cart (${window.getQuotationItemsCount()} items)</h2>
+            <button class="close-quotation">&times;</button>
+        </div>
+        <div class="quotation-items">
+            ${quotationItemsHTML}
+        </div>
+        <div class="quotation-footer">
+            <button class="request-all-quotes" ${window.quotationItems.length === 0 ? 'disabled' : ''}>Request All Quotes via WhatsApp</button>
+        </div>
+    `;
+
+    document.body.appendChild(quotationCart);
+
+    // Add overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'quotation-overlay';
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5);
+        opacity: 0; visibility: hidden; transition: all 0.3s ease; z-index: 999;
+    `;
+    document.body.appendChild(overlay);
+
+    // Show quotation cart and overlay
+    setTimeout(() => {
+        quotationCart.classList.add('active');
+        overlay.style.opacity = '1';
+        overlay.style.visibility = 'visible';
+        document.body.style.overflow = 'hidden';
+    }, 10);
+
+    function updateQuotationDisplay() {
+        const quotationItemsContainer = quotationCart.querySelector('.quotation-items');
+        const requestButton = quotationCart.querySelector('.request-all-quotes');
+        const quotationHeader = quotationCart.querySelector('.quotation-header h2');
+
+        const quotationItemsHTML = window.quotationItems.length > 0 ? 
+            window.quotationItems.map(item => `
+                <div class="quotation-item" data-product-id="${item.id}">
+                    <img src="${item.image || FALLBACK_IMG}" alt="${item.name}" class="quotation-item-image">
+                    <div class="quotation-item-details">
+                        <h4>${item.name}</h4>
+                        ${item.selectedVariant ? `<p class="variant-info">Variant: ${item.selectedVariant.name}</p>` : ''}
+                        <div class="quantity-controls">
+                            <button class="quantity-btn minus" data-product-id="${item.id}" ${item.quantity <= 1 ? 'disabled' : ''}>-</button>
+                            <span class="quantity">${item.quantity}</span>
+                            <button class="quantity-btn plus" data-product-id="${item.id}">+</button>
+                            <button class="remove-item" data-product-id="${item.id}">Remove</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('') : 
+            '<div class="empty-quotation">Your quotation list is empty</div>';
+
+        quotationItemsContainer.innerHTML = quotationItemsHTML;
+        quotationHeader.textContent = `Quotation Cart (${window.getQuotationItemsCount()} items)`;
+        requestButton.disabled = window.quotationItems.length === 0;
+
+        attachQuotationEventListeners();
+        window.updateQuotationButtonSafe();
+    }
+
+    function attachQuotationEventListeners() {
+        // Quantity increase
+        quotationCart.querySelectorAll('.quantity-btn.plus').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const productId = parseInt(e.target.getAttribute('data-product-id'));
+                const item = window.quotationItems.find(item => item.id === productId);
+                if (item) {
+                    item.quantity++;
+                    updateQuotationDisplay();
+                }
+            });
+        });
+
+        // Quantity decrease
+        quotationCart.querySelectorAll('.quantity-btn.minus').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const productId = parseInt(e.target.getAttribute('data-product-id'));
+                const item = window.quotationItems.find(item => item.id === productId);
+                if (item && item.quantity > 1) {
+                    item.quantity--;
+                    updateQuotationDisplay();
+                }
+            });
+        });
+
+        // Remove item
+        quotationCart.querySelectorAll('.remove-item').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const productId = parseInt(e.target.getAttribute('data-product-id'));
+                window.quotationItems = window.quotationItems.filter(item => item.id !== productId);
+                updateQuotationDisplay();
+                if (window.updateModalButtons) window.updateModalButtons();
+            });
+        });
+
+        // Request all quotes button
+        const requestBtn = quotationCart.querySelector('.request-all-quotes');
+        if (requestBtn) {
+            requestBtn.addEventListener('click', () => {
+                window.requestAllQuotes();
+            });
+        }
+    }
+
+    attachQuotationEventListeners();
+
+    const closeQuotationCart = () => {
+        quotationCart.classList.remove('active');
+        overlay.style.opacity = '0';
+        overlay.style.visibility = 'hidden';
+        document.body.style.overflow = 'auto';
+        setTimeout(() => {
+            if (document.body.contains(quotationCart)) document.body.removeChild(quotationCart);
+            if (document.body.contains(overlay)) document.body.removeChild(overlay);
+        }, 300);
+    };
+
+    quotationCart.querySelector('.close-quotation').addEventListener('click', closeQuotationCart);
+    overlay.addEventListener('click', closeQuotationCart);
+    
+    const escapeHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeQuotationCart();
+            document.removeEventListener('keydown', escapeHandler);
+        }
+    };
+    document.addEventListener('keydown', escapeHandler);
+    
+    console.log('Quotation cart opened successfully');
+};
+
+// Function to request all quotes via WhatsApp
+window.requestAllQuotes = function() {
+    if (window.quotationItems.length === 0) {
+        alert('Your quotation cart is empty');
+        return;
+    }
+
+    const whatsappNumber = "917358223153";
+    
+    let message = "Hi, I would like to request quotes for the following products:\n\n";
+    
+    window.quotationItems.forEach((item, index) => {
+        const variantText = item.selectedVariant ? ` (${item.selectedVariant.name})` : '';
+        message += `${index + 1}. ${item.name}${variantText} - Quantity: ${item.quantity}\n`;
+    });
+    
+    message += "\nPlease provide your best quotes for these items. Thank you!";
+    
+    const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
+    
+    console.log('Opening WhatsApp because user clicked Request All Quotes');
+    window.open(whatsappUrl, '_blank');
+};
+
+// ===============================
+// MAIN PRODUCT SYSTEM IN CLOSURE
+// ===============================
+
 (function() {
     'use strict';
 
-    // ===============================
-    // GLOBAL STATE & CONSTANTS
-    // ===============================
-
-    const BASE_URL = 'https://admin.ismatindia.com:7000';
-    const FALLBACK_IMG = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0xMDAgNzBWMTMwTTcwIDEwMEgxMzAiIHN0cm9rZT0iI0NDQ0NDQyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPC9zdmc+';
-
     // Global state
     window.isFilterSystemActive = false;
-    window.cartItems = window.cartItems || [];
-    window.quotationItems = window.quotationItems || [];
     
     Object.defineProperty(window, 'allProducts', {
         get: () => window._allProducts || [],
@@ -71,10 +387,11 @@
     };
 
     const formatPrice = (price) => price && !isNaN(price) && price > 0 ? parseFloat(price).toFixed(2) : null;
-
     const getCurrencySymbol = () => '&#8377;';
-
     const isSimpleSpecification = (text) => /^\d+[\w]*$|^\d+\/\d+|^\d+\.\d+|mm$|cm$|V$|W$|A$|kg$|g$|^[A-Z]{2,4}\+?$|^T\d+$/i.test(text.trim());
+
+    // Export getImageUrl globally
+    window.getImageUrl = getImageUrl;
 
     // YouTube and PDF helpers
     const getYouTubeVideoId = (url) => {
@@ -109,30 +426,29 @@
     };
 
     // ===============================
-    // CART & QUOTATION MANAGEMENT (UNIFIED)
+    // CART MANAGEMENT
     // ===============================
 
-    function addToCollection(product, collectionType) {
+    function addToCart(product) {
         if (!product || isProcessingClick) return 0;
         
         isProcessingClick = true;
         setTimeout(() => isProcessingClick = false, 500);
         
-        const collection = window[`${collectionType}Items`];
         const stockNumber = selectedVariant?.stock_number || product.stock_number;
         
-        if (collectionType === 'cart' && stockNumber <= 0) {
+        if (stockNumber <= 0) {
             alert('This item is currently out of stock.');
             return 0;
         }
         
-        const existingItem = collection.find(item => 
+        const existingItem = window.cartItems.find(item => 
             item.id === product.id && 
             (item.selectedVariant?.name || null) === (selectedVariant?.name || null)
         );
         
         if (existingItem) {
-            if (collectionType === 'cart' && existingItem.quantity >= Math.min(10, stockNumber)) {
+            if (existingItem.quantity >= Math.min(10, stockNumber)) {
                 alert(`Maximum available quantity reached.`);
                 return existingItem.quantity;
             }
@@ -152,276 +468,29 @@
                     name: selectedVariant.name,
                     price: selectedVariant.price,
                     sku: selectedVariant.sku || product.sku,
-                    ...(collectionType === 'cart' && { stock_number: selectedVariant.stock_number })
+                    stock_number: selectedVariant.stock_number
                 } : null,
-                ...(collectionType === 'cart' && { stock_number: stockNumber })
+                stock_number: stockNumber
             };
             
-            collection.push(newItem);
+            window.cartItems.push(newItem);
         }
         
-        // Update buttons safely without auto-opening WhatsApp
-        if (collectionType === 'quotation') {
-            updateQuotationButtonSafe();
-        } else {
-            const updateFn = window[`update${collectionType.charAt(0).toUpperCase() + collectionType.slice(1)}Button`];
-            updateFn?.();
-        }
-        
+        window.updateCartButton?.();
         return existingItem ? existingItem.quantity : 1;
     }
 
-    const addToCart = (product) => addToCollection(product, 'cart');
-    
-    // SAFE quotation function that prevents auto-WhatsApp opening
-    const addToQuotation = (product) => {
-        console.log('Adding to quotation - NO WhatsApp will auto-open');
-        return addToCollection(product, 'quotation');
-    };
-
-    const isInCollection = (productId, variantId, collectionType) => 
-        window[`${collectionType}Items`].some(item => 
-            item.id === productId && (item.selectedVariant?.name || null) === variantId
+    const isInCart = (id, variant) => 
+        window.cartItems.some(item => 
+            item.id === id && (item.selectedVariant?.name || null) === variant
         );
 
-    const getCollectionQuantity = (productId, variantId, collectionType) => {
-        const item = window[`${collectionType}Items`].find(item => 
-            item.id === productId && (item.selectedVariant?.name || null) === variantId
+    const getCartQuantity = (id, variant) => {
+        const item = window.cartItems.find(item => 
+            item.id === id && (item.selectedVariant?.name || null) === variant
         );
         return item?.quantity || 0;
     };
-
-    const isInCart = (id, variant) => isInCollection(id, variant, 'cart');
-    const isInQuotation = (id, variant) => isInCollection(id, variant, 'quotation');
-    const getCartQuantity = (id, variant) => getCollectionQuantity(id, variant, 'cart');
-    const getQuotationQuantity = (id, variant) => getCollectionQuantity(id, variant, 'quotation');
-
-    // ===============================
-    // QUOTATION SYSTEM FUNCTIONS
-    // ===============================
-
-    function getQuotationItemsCount() {
-        return window.quotationItems.reduce((total, item) => total + item.quantity, 0);
-    }
-
-    // SAFE quotation button update - NO auto-WhatsApp
-    function updateQuotationButtonSafe() {
-        console.log('Safe quotation button update - NO WhatsApp will open');
-        
-        const quotationButton = document.getElementById('quotation-cart-button');
-        if (quotationButton) {
-            const count = getQuotationItemsCount();
-            
-            // Remove existing badge
-            const existingBadge = quotationButton.querySelector('.quotation-badge');
-            if (existingBadge) existingBadge.remove();
-            
-            quotationButton.setAttribute('data-count', count);
-            
-            const quotationText = quotationButton.querySelector('.quotation-text');
-            if (quotationText) {
-                quotationText.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
-            } else if (quotationButton.childNodes.length === 1 && quotationButton.childNodes[0].nodeType === 3) {
-                quotationButton.textContent = count > 0 ? `Quotes (${count})` : 'Quotes';
-            }
-            
-            if (count > 0) {
-                const badge = document.createElement('span');
-                badge.className = 'quotation-badge';
-                badge.textContent = count;
-                badge.style.cssText = `
-                    position: absolute; top: -8px; right: -8px; background: #28a745; color: white;
-                    border-radius: 50%; width: 20px; height: 20px; font-size: 12px; font-weight: bold;
-                    display: flex; align-items: center; justify-content: center; z-index: 10;
-                    animation: quotationBadgePulse 0.3s ease-out;
-                `;
-                
-                const currentPosition = window.getComputedStyle(quotationButton).position;
-                if (currentPosition === 'static') {
-                    quotationButton.style.position = 'relative';
-                }
-                
-                quotationButton.appendChild(badge);
-            }
-        }
-    }
-
-    function showQuotationCart() {
-        const quotationCart = document.createElement('div');
-        quotationCart.className = 'quotation-sidebar';
-        
-        const quotationItemsHTML = window.quotationItems.length > 0 ? 
-            window.quotationItems.map(item => `
-                <div class="quotation-item" data-product-id="${item.id}">
-                    <img src="${item.image || FALLBACK_IMG}" alt="${item.name}" class="quotation-item-image">
-                    <div class="quotation-item-details">
-                        <h4>${item.name}</h4>
-                        ${item.selectedVariant ? `<p class="variant-info">Variant: ${item.selectedVariant.name}</p>` : ''}
-                        <div class="quantity-controls">
-                            <button class="quantity-btn minus" data-product-id="${item.id}" ${item.quantity <= 1 ? 'disabled' : ''}>-</button>
-                            <span class="quantity">${item.quantity}</span>
-                            <button class="quantity-btn plus" data-product-id="${item.id}">+</button>
-                            <button class="remove-item" data-product-id="${item.id}">Remove</button>
-                        </div>
-                    </div>
-                </div>
-            `).join('') : 
-            '<div class="empty-quotation">Your quotation list is empty</div>';
-
-        quotationCart.innerHTML = `
-            <div class="quotation-header">
-                <h2>Quotation Cart (${getQuotationItemsCount()} items)</h2>
-                <button class="close-quotation">&times;</button>
-            </div>
-            <div class="quotation-items">
-                ${quotationItemsHTML}
-            </div>
-            <div class="quotation-footer">
-                <button class="request-all-quotes" ${window.quotationItems.length === 0 ? 'disabled' : ''}>Request All Quotes via WhatsApp</button>
-            </div>
-        `;
-
-        document.body.appendChild(quotationCart);
-
-        // Add overlay
-        const overlay = document.createElement('div');
-        overlay.className = 'quotation-overlay';
-        overlay.style.cssText = `
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5);
-            opacity: 0; visibility: hidden; transition: all 0.3s ease; z-index: 999;
-        `;
-        document.body.appendChild(overlay);
-
-        // Show quotation cart and overlay
-        setTimeout(() => {
-            quotationCart.classList.add('active');
-            overlay.style.opacity = '1';
-            overlay.style.visibility = 'visible';
-            document.body.style.overflow = 'hidden';
-        }, 10);
-
-        function updateQuotationDisplay() {
-            const quotationItemsContainer = quotationCart.querySelector('.quotation-items');
-            const requestButton = quotationCart.querySelector('.request-all-quotes');
-            const quotationHeader = quotationCart.querySelector('.quotation-header h2');
-
-            const quotationItemsHTML = window.quotationItems.length > 0 ? 
-                window.quotationItems.map(item => `
-                    <div class="quotation-item" data-product-id="${item.id}">
-                        <img src="${item.image || FALLBACK_IMG}" alt="${item.name}" class="quotation-item-image">
-                        <div class="quotation-item-details">
-                            <h4>${item.name}</h4>
-                            ${item.selectedVariant ? `<p class="variant-info">Variant: ${item.selectedVariant.name}</p>` : ''}
-                            <div class="quantity-controls">
-                                <button class="quantity-btn minus" data-product-id="${item.id}" ${item.quantity <= 1 ? 'disabled' : ''}>-</button>
-                                <span class="quantity">${item.quantity}</span>
-                                <button class="quantity-btn plus" data-product-id="${item.id}">+</button>
-                                <button class="remove-item" data-product-id="${item.id}">Remove</button>
-                            </div>
-                        </div>
-                    </div>
-                `).join('') : 
-                '<div class="empty-quotation">Your quotation list is empty</div>';
-
-            quotationItemsContainer.innerHTML = quotationItemsHTML;
-            quotationHeader.textContent = `Quotation Cart (${getQuotationItemsCount()} items)`;
-            requestButton.disabled = window.quotationItems.length === 0;
-
-            attachQuotationEventListeners();
-            updateQuotationButtonSafe();
-        }
-
-        function attachQuotationEventListeners() {
-            // Quantity increase
-            quotationCart.querySelectorAll('.quantity-btn.plus').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const productId = parseInt(e.target.getAttribute('data-product-id'));
-                    const item = window.quotationItems.find(item => item.id === productId);
-                    if (item) {
-                        item.quantity++;
-                        updateQuotationDisplay();
-                    }
-                });
-            });
-
-            // Quantity decrease
-            quotationCart.querySelectorAll('.quantity-btn.minus').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const productId = parseInt(e.target.getAttribute('data-product-id'));
-                    const item = window.quotationItems.find(item => item.id === productId);
-                    if (item && item.quantity > 1) {
-                        item.quantity--;
-                        updateQuotationDisplay();
-                    }
-                });
-            });
-
-            // Remove item
-            quotationCart.querySelectorAll('.remove-item').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const productId = parseInt(e.target.getAttribute('data-product-id'));
-                    window.quotationItems = window.quotationItems.filter(item => item.id !== productId);
-                    updateQuotationDisplay();
-                    updateModalButtons(); // Update modal if open
-                });
-            });
-
-            // Request all quotes button - ONLY opens WhatsApp when user clicks this
-            const requestBtn = quotationCart.querySelector('.request-all-quotes');
-            if (requestBtn) {
-                requestBtn.addEventListener('click', () => {
-                    requestAllQuotes();
-                });
-            }
-        }
-
-        attachQuotationEventListeners();
-
-        const closeQuotationCart = () => {
-            quotationCart.classList.remove('active');
-            overlay.style.opacity = '0';
-            overlay.style.visibility = 'hidden';
-            document.body.style.overflow = 'auto';
-            setTimeout(() => {
-                if (document.body.contains(quotationCart)) document.body.removeChild(quotationCart);
-                if (document.body.contains(overlay)) document.body.removeChild(overlay);
-            }, 300);
-        };
-
-        quotationCart.querySelector('.close-quotation').addEventListener('click', closeQuotationCart);
-        overlay.addEventListener('click', closeQuotationCart);
-        
-        const escapeHandler = (e) => {
-            if (e.key === 'Escape') {
-                closeQuotationCart();
-                document.removeEventListener('keydown', escapeHandler);
-            }
-        };
-        document.addEventListener('keydown', escapeHandler);
-    }
-
-    function requestAllQuotes() {
-        if (window.quotationItems.length === 0) {
-            alert('Your quotation cart is empty');
-            return;
-        }
-
-        const whatsappNumber = "917358223153";
-        
-        let message = "Hi, I would like to request quotes for the following products:\n\n";
-        
-        window.quotationItems.forEach((item, index) => {
-            const variantText = item.selectedVariant ? ` (${item.selectedVariant.name})` : '';
-            message += `${index + 1}. ${item.name}${variantText} - Quantity: ${item.quantity}\n`;
-        });
-        
-        message += "\nPlease provide your best quotes for these items. Thank you!";
-        
-        const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
-        
-        console.log('Opening WhatsApp only because user clicked "Request All Quotes" button');
-        window.open(whatsappUrl, '_blank');
-    }
 
     // ===============================
     // PRODUCT CARD & DISPLAY
@@ -429,7 +498,7 @@
 
     function createProductCard(product) {
         const cartQty = getCartQuantity(product.id);
-        const quoteQty = getQuotationQuantity(product.id);
+        const quoteQty = window.getQuotationQuantity(product.id);
         const isAdded = cartQty > 0;
         const isQuoted = quoteQty > 0;
         
@@ -459,7 +528,7 @@
         
         return `
             <div class="product-card ${isOutOfStock ? 'out-of-stock-card' : ''}" data-product-id="${product.id}">
-                <div class="product-card-content" data-action="open-modal">
+                <div class="product-card-content" onclick="window.openProductModal(window.allProducts.find(p => p.id === ${product.id}))">
                     <img src="${getImageUrl(product.product_image_urls?.[0])}" 
                          class="product-image" 
                          alt="${product.product_name || 'Product'}"
@@ -470,18 +539,18 @@
                 </div>
                 <div class="action-buttons-wrapper">
                     <div class="action-buttons">
-                        <button class="action-btn view-details-button" data-action="view-details" title="View Details">
+                        <button class="action-btn view-details-button" onclick="window.openProductModal(window.allProducts.find(p => p.id === ${product.id}))" title="View Details">
                             <i class="fas fa-eye"></i>
                         </button>
                         ${hasStockForCart ? `
                             <button class="action-btn add-to-cart ${isAdded ? 'added' : ''}" 
-                                    data-action="add-to-cart"
+                                    onclick="window.addToCart(window.allProducts.find(p => p.id === ${product.id}))"
                                     title="${isOutOfStock ? 'Out of Stock' : isAdded ? `In Cart (${cartQty})` : 'Add to Cart'}"
                                     ${isOutOfStock ? 'disabled' : ''}>
                                 <i class="fas fa-${isOutOfStock ? 'times' : 'shopping-cart'}"></i>
                             </button>` : ''}
                         <button class="action-btn request-quote ${isQuoted ? 'quoted' : ''}" 
-                                data-action="request-quote"
+                                onclick="console.log('Quote button clicked'); window.addToQuotation(window.allProducts.find(p => p.id === ${product.id}))"
                                 title="${isQuoted ? `Quoted (${quoteQty})` : 'Request Quote'}">
                             <i class="fab fa-whatsapp"></i>
                         </button>
@@ -500,8 +569,8 @@
             const hasSearchQuery = currentSearchQuery?.trim();
             const message = hasSearchQuery ? 'No products found matching your search criteria.' : 'No products found matching your filters.';
             const clearButton = hasSearchQuery ? 
-                '<button onclick="clearSearchInput()">Clear Search</button>' : 
-                '<button onclick="clearAllFiltersFromSidebar()">Clear Filters</button>';
+                '<button onclick="window.clearSearchInput()">Clear Search</button>' : 
+                '<button onclick="window.clearAllFiltersFromSidebar()">Clear Filters</button>';
             
             dom.productsGrid.innerHTML = `
                 <div class="no-results-message">
@@ -519,43 +588,6 @@
         if ((currentSearchQuery || hasActiveFilters()) && dom.endIndicator) {
             dom.endIndicator.style.display = 'block';
             dom.endIndicator.innerHTML = '<p>End of filtered results</p>';
-        }
-    }
-
-    // ===============================
-    // EVENT HANDLING
-    // ===============================
-
-    function handleProductCardClick(e) {
-        if (isProcessingClick) {
-            e.preventDefault();
-            e.stopPropagation();
-            return;
-        }
-        
-        const card = e.target.closest('.product-card');
-        if (!card) return;
-        
-        const productId = parseInt(card.getAttribute('data-product-id'));
-        const product = window.allProducts.find(p => p.id === productId);
-        if (!product) return;
-        
-        const action = e.target.closest('[data-action]')?.getAttribute('data-action');
-        
-        if (['view-details', 'open-modal'].includes(action) || e.target.closest('.product-card-content')) {
-            e.preventDefault();
-            e.stopPropagation();
-            openProductModal(product);
-        } else if (action === 'add-to-cart' && !isProcessingClick) {
-            e.preventDefault();
-            e.stopPropagation();
-            addToCart(product);
-        } else if (action === 'request-quote' && !isProcessingClick) {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('Request quote clicked for product:', product.product_name);
-            // Call the global function to ensure it works
-            window.addToQuotation(product);
         }
     }
 
@@ -892,23 +924,23 @@
                 quoteBtn = document.createElement('button');
                 quoteBtn.id = 'modalRequestQuote';
                 quoteBtn.className = 'product-modal-request-quote';
-                quoteBtn.addEventListener('click', () => {
-                    if (currentModalProduct) {
-                        console.log('Modal quote button clicked');
-                        window.addToQuotation(currentModalProduct);
-                        updateModalButtons();
-                    }
-                });
                 modalActions.appendChild(quoteBtn);
             }
         }
         
         if (quoteBtn) {
-            const isQuoted = isInQuotation(currentModalProduct.id, variantId);
-            const quantity = getQuotationQuantity(currentModalProduct.id, variantId);
+            const isQuoted = window.isInQuotation(currentModalProduct.id, variantId);
+            const quantity = window.getQuotationQuantity(currentModalProduct.id, variantId);
             
             quoteBtn.className = isQuoted ? 'product-modal-request-quote quoted' : 'product-modal-request-quote';
             quoteBtn.innerHTML = `<i class="fab fa-whatsapp"></i> ${isQuoted ? `QUOTED (${quantity})` : 'REQUEST QUOTE'}`;
+            
+            // Remove old listeners and add new one
+            quoteBtn.onclick = function() {
+                console.log('Modal quote button clicked');
+                window.addToQuotation(currentModalProduct);
+                updateModalButtons();
+            };
         }
     }
 
@@ -945,13 +977,26 @@
             if (images.length > 1) {
                 elements.gallery.innerHTML = images.map((img, i) => 
                     `<img src="${getImageUrl(img)}" class="gallery-thumbnail ${i === 0 ? 'active' : ''}" 
-                          onclick="changeMainImage('${img}', this)">`).join('');
+                          onclick="window.changeMainImage('${img}', this)">`).join('');
                 elements.gallery.style.display = 'flex';
             } else {
                 elements.gallery.style.display = 'none';
             }
         }
 
+        // Handle all the modal content sections (description, video, PDF, variants)
+        handleModalContent(product);
+        
+        updateModalPrice();
+        updateStockDisplay();
+        updateModalButtons();
+        
+        dom.modal.style.display = 'block';
+        dom.modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function handleModalContent(product) {
         // Handle product descriptions
         let descriptionContainer = document.getElementById('modalDescription') || 
                                  document.getElementById('product-modal-description') ||
@@ -1151,7 +1196,7 @@
                 
                 return `<div class="variant-option ${isOutOfStock ? 'out-of-stock' : ''}" 
                     data-variant-id="${variant.name.replace(/"/g, '&quot;')}"
-                    onclick="${isOutOfStock ? '' : `selectVariant(${JSON.stringify(variant).replace(/"/g, '&quot;')})`}">
+                    onclick="${isOutOfStock ? '' : `window.selectVariant(${JSON.stringify(variant).replace(/"/g, '&quot;')})`}">
                     <div class="variant-name">${variant.name}</div>
                     ${formattedPrice ? `<div class="variant-price">${getCurrencySymbol()}${formattedPrice}</div>` : ''}
                     <div class="variant-stock ${stockInfo.class}"><i class="fas fa-box"></i> ${stockInfo.text}</div>
@@ -1163,14 +1208,6 @@
         } else if (variantsSection) {
             variantsSection.style.display = 'none';
         }
-        
-        updateModalPrice();
-        updateStockDisplay();
-        updateModalButtons();
-        
-        dom.modal.style.display = 'block';
-        dom.modal.classList.add('show');
-        document.body.style.overflow = 'hidden';
     }
 
     function closeProductModal() {
@@ -1240,7 +1277,7 @@
             
         } catch (error) {
             console.error('Error loading products:', error);
-            const errorMsg = `<div class="error">Failed to load products. <button onclick="loadProducts(${page}, ${append})">Retry</button></div>`;
+            const errorMsg = `<div class="error">Failed to load products. <button onclick="window.loadProducts(${page}, ${append})">Retry</button></div>`;
             if (dom.productsGrid) {
                 dom.productsGrid.innerHTML = append ? dom.productsGrid.innerHTML + errorMsg : errorMsg;
             }
@@ -1250,7 +1287,7 @@
     }
 
     // ===============================
-    // INITIALIZATION & UTILITIES
+    // EVENT HANDLING & INITIALIZATION
     // ===============================
 
     function setupEventListeners() {
@@ -1313,25 +1350,6 @@
 
         document.getElementById('closeModalBtn')?.addEventListener('click', closeProductModal);
         
-        // Quotation cart button - with retry mechanism
-        function attachQuotationButtonListener() {
-            const quotationButton = document.getElementById('quotation-cart-button');
-            if (quotationButton && !quotationButton.hasAttribute('data-quotation-listener')) {
-                quotationButton.setAttribute('data-quotation-listener', 'true');
-                quotationButton.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    console.log('Quotation button clicked - opening sidebar');
-                    showQuotationCart();
-                });
-                console.log('Quotation button listener attached');
-            }
-        }
-        
-        // Try immediately and also with delays for dynamic content
-        attachQuotationButtonListener();
-        setTimeout(attachQuotationButtonListener, 500);
-        setTimeout(attachQuotationButtonListener, 1000);
-        
         // History and keyboard events
         window.addEventListener('popstate', (e) => {
             if (isModalOpen) {
@@ -1355,10 +1373,6 @@
                 setTimeout(updateSearchIndicator, 100);
             }
         });
-
-        // Unified product card handling
-        document.removeEventListener('click', handleProductCardClick, true);
-        document.addEventListener('click', handleProductCardClick, true);
     }
 
     function setupInfiniteScroll() {
@@ -1389,11 +1403,7 @@
         window.addEventListener('scroll', onScroll, { passive: true });
     }
 
-    // ===============================
-    // GLOBAL EXPORTS & INITIALIZATION
-    // ===============================
-
-    // Export essential functions with SAFE quotation handling
+    // Export essential functions globally
     Object.assign(window, {
         openFilterSidebar: () => applyFilters(),
         closeFilterSidebar,
@@ -1415,13 +1425,10 @@
         appendProductsToGrid: (products) => displayProducts(products, true),
         addToCart,
         isInCart,
-        isInQuotation,
         getCartQuantity,
-        getQuotationQuantity,
-        getQuotationItemsCount,
         updateModalCartButton: updateModalButtons,
         updateModalQuoteButton: updateModalButtons,
-        updateQuotationButton: updateQuotationButtonSafe, // SAFE version
+        updateQuotationButton: window.updateQuotationButtonSafe,
         createProductCard,
         clearSearchInput: () => {
             if (dom.searchInput) dom.searchInput.value = '';
@@ -1433,52 +1440,8 @@
         clearAllFiltersFromSidebar: applyFilters,
         refreshProductDisplay: updateModalButtons,
         refreshQuoteDisplay: updateModalButtons,
-        showQuotationCart,
-        requestAllQuotes,
-        getImageUrl
+        updateModalButtons
     });
-
-    // CRITICAL: Override window.addToQuotation to ensure it works globally
-    window.addToQuotation = function(product) {
-        console.log('Adding to quotation - NO WhatsApp will auto-open');
-        if (!product) return 0;
-        
-        // Use the global selectedVariant if available
-        const currentSelectedVariant = window.selectedVariant || selectedVariant || null;
-        
-        const existingItem = window.quotationItems.find(item => 
-            item.id === product.id && 
-            (item.selectedVariant?.name || null) === (currentSelectedVariant?.name || null)
-        );
-        
-        if (existingItem) {
-            existingItem.quantity += 1;
-        } else {
-            const price = product.offer_price || product.mrp || 0;
-            const finalPrice = currentSelectedVariant ? (currentSelectedVariant.price || price) : price;
-            
-            const newItem = {
-                id: product.id,
-                name: product.product_name,
-                price: parseFloat(finalPrice),
-                image: getImageUrl(product.product_image_urls && product.product_image_urls[0]),
-                category: product.category,
-                quantity: 1,
-                selectedVariant: currentSelectedVariant ? {
-                    name: currentSelectedVariant.name,
-                    price: currentSelectedVariant.price,
-                    sku: currentSelectedVariant.sku || product.sku
-                } : null
-            };
-            
-            window.quotationItems.push(newItem);
-        }
-        
-        updateQuotationButtonSafe();
-        updateModalButtons();
-        
-        return existingItem ? existingItem.quantity : 1;
-    };
 
     // Search integration
     window.onSearchComplete = (results, query) => {
@@ -1495,12 +1458,83 @@
         loadProducts(1, false, false);
     };
 
-    // ===============================
-    // STYLES
-    // ===============================
+    // Initialize
+    function init() {
+        cacheElements();
+        setupEventListeners();
+        setupInfiniteScroll();
+        
+        // Restore saved state
+        try {
+            const saved = localStorage.getItem('cartItems');
+            if (saved) window.cartItems = JSON.parse(saved);
+            const savedQuote = localStorage.getItem('quotationItems');
+            if (savedQuote) window.quotationItems = JSON.parse(savedQuote);
+        } catch (e) {}
+        
+        loadProducts(1, false);
+        setTimeout(updateSearchIndicator, 500);
+        
+        console.log('Main product system loaded');
+    }
 
-    function addStyles() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        setTimeout(init, 100);
+    }
+
+})();
+
+// ===============================
+// QUOTATION SYSTEM INITIALIZATION (OUTSIDE CLOSURE)
+// ===============================
+
+function initializeQuotationSystem() {
+    console.log('Initializing quotation system...');
+    
+    // Update quotation button immediately
+    window.updateQuotationButtonSafe();
+    
+    // Try to attach quotation button listener with retries
+    function attachQuotationButton() {
+        const quotationButton = document.getElementById('quotation-cart-button');
+        
+        if (quotationButton && !quotationButton.hasAttribute('data-quotation-attached')) {
+            console.log('Found quotation button, attaching listener');
+            quotationButton.setAttribute('data-quotation-attached', 'true');
+            
+            quotationButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Quotation cart button clicked - opening sidebar');
+                window.showQuotationCart();
+            });
+            
+            console.log('✅ Quotation button listener attached successfully');
+            return true;
+        } else if (quotationButton) {
+            console.log('Quotation button already has listener');
+            return true;
+        } else {
+            console.log('Quotation button not found yet');
+            return false;
+        }
+    }
+    
+    // Try multiple times
+    if (!attachQuotationButton()) {
+        setTimeout(() => attachQuotationButton(), 500);
+        setTimeout(() => attachQuotationButton(), 1000);
+        setTimeout(() => attachQuotationButton(), 2000);
+    }
+}
+
+// Add all the styles
+function addQuotationStyles() {
+    if (!document.getElementById('unified-styles')) {
         const style = document.createElement('style');
+        style.id = 'unified-styles';
         style.textContent = `
             /* Core Product & Cart Styles */
             .cart-actions-container { display: flex; gap: 8px; margin-top: 10px; align-items: stretch; }
@@ -1685,103 +1719,17 @@
         `;
         document.head.appendChild(style);
     }
+}
 
-    // Initialize
-    function init() {
-        cacheElements();
-        addStyles();
-        setupEventListeners();
-        setupInfiniteScroll();
-        
-        // Restore saved state
-        try {
-            const saved = localStorage.getItem('cartItems');
-            if (saved) window.cartItems = JSON.parse(saved);
-            const savedQuote = localStorage.getItem('quotationItems');
-            if (savedQuote) window.quotationItems = JSON.parse(savedQuote);
-        } catch (e) {}
-        
-        loadProducts(1, false);
+// Initialize quotation system when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        addQuotationStyles();
         initializeQuotationSystem();
-        setTimeout(updateSearchIndicator, 500);
-        
-        console.log('Unified ISMAT Products & Quotation System loaded - WhatsApp auto-open prevention ACTIVE');
-    }
+    });
+} else {
+    addQuotationStyles();
+    initializeQuotationSystem();
+}
 
-    // Separate quotation system initialization for better timing
-    function initializeQuotationSystem() {
-        // Try multiple times to ensure quotation button gets attached
-        const maxAttempts = 5;
-        let attempts = 0;
-        
-        function tryAttachQuotationButton() {
-            const quotationButton = document.getElementById('quotation-cart-button');
-            
-            if (quotationButton && !quotationButton.hasAttribute('data-quotation-attached')) {
-                quotationButton.setAttribute('data-quotation-attached', 'true');
-                quotationButton.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('Quotation cart button clicked - showing sidebar');
-                    showQuotationCart();
-                });
-                console.log('✅ Quotation button listener successfully attached');
-                updateQuotationButtonSafe();
-                return true;
-            }
-            
-            attempts++;
-            if (attempts < maxAttempts) {
-                console.log(`Quotation button not found, attempt ${attempts}/${maxAttempts}`);
-                setTimeout(tryAttachQuotationButton, 500);
-            } else {
-                console.warn('⚠️ Could not find quotation-cart-button after', maxAttempts, 'attempts');
-            }
-            
-            return false;
-        }
-        
-        tryAttachQuotationButton();
-        updateQuotationButtonSafe();
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        setTimeout(init, 100);
-    }
-
-    // Additional quotation system initialization - runs after main init
-    function ensureQuotationSystemWorks() {
-        // Make sure the functions are globally accessible
-        window.showQuotationCart = showQuotationCart;
-        window.updateQuotationButtonSafe = updateQuotationButtonSafe;
-        window.getQuotationItemsCount = getQuotationItemsCount;
-        
-        // Debug current state
-        console.log('Quotation items count:', getQuotationItemsCount());
-        console.log('Quotation button exists:', !!document.getElementById('quotation-cart-button'));
-        
-        // Update quotation button
-        updateQuotationButtonSafe();
-        
-        // Try to attach listener again if needed
-        const quotationButton = document.getElementById('quotation-cart-button');
-        if (quotationButton && !quotationButton.hasAttribute('data-quotation-attached')) {
-            quotationButton.setAttribute('data-quotation-attached', 'true');
-            quotationButton.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('Quotation cart button clicked');
-                showQuotationCart();
-            });
-            console.log('✅ Quotation button attached successfully');
-        }
-    }
-
-    // Run quotation system initialization with multiple timings
-    setTimeout(ensureQuotationSystemWorks, 100);
-    setTimeout(ensureQuotationSystemWorks, 1000);
-    setTimeout(ensureQuotationSystemWorks, 2000);
-
-})();
+console.log('✅ Unified ISMAT system loaded - Quotation system should work now');
