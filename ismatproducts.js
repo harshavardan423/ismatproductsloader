@@ -76,6 +76,38 @@
 
     const isSimpleSpecification = (text) => /^\d+[\w]*$|^\d+\/\d+|^\d+\.\d+|mm$|cm$|V$|W$|A$|kg$|g$|^[A-Z]{2,4}\+?$|^T\d+$/i.test(text.trim());
 
+    // YouTube and PDF helpers
+    const getYouTubeVideoId = (url) => {
+        const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+        return url.match(regex)?.[1] || null;
+    };
+
+    const createYouTubeEmbed = (url, productName) => {
+        const videoId = getYouTubeVideoId(url);
+        if (!videoId) return `<a href="${url}" target="_blank" class="product-youtube-link">Watch Video</a>`;
+        
+        const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+        return `
+            <a href="${url}" target="_blank" class="product-youtube-link">
+                <div class="youtube-video-container">
+                    <img src="${thumbnailUrl}" alt="Video thumbnail" class="youtube-thumbnail">
+                    <div class="youtube-play-overlay">
+                        <div class="youtube-play-icon"></div>
+                    </div>
+                    <div class="youtube-video-title">${productName} - Watch Video</div>
+                </div>
+            </a>`;
+    };
+
+    const createYouTubeSearchUrl = (productName) => 
+        `https://www.youtube.com/results?search_query=${encodeURIComponent(productName)}`;
+
+    const getPdfUrl = (pdfUrl) => {
+        if (!pdfUrl) return '';
+        if (pdfUrl.startsWith('http')) return pdfUrl;
+        return BASE_URL + (pdfUrl.startsWith('/') ? pdfUrl : '/' + pdfUrl);
+    };
+
     // ===============================
     // CART & QUOTATION MANAGEMENT (UNIFIED)
     // ===============================
@@ -665,6 +697,241 @@
             }
         }
         
+    function openProductModal(product) {
+        currentModalProduct = product;
+        selectedVariant = null;
+        
+        if (!dom.modal) return;
+        
+        modalHistoryState = { modal: true, timestamp: Date.now() };
+        history.pushState(modalHistoryState, '', window.location.href);
+        isModalOpen = true;
+        
+        // Update modal title and product name
+        const titleElement = document.getElementById('modalTitle');
+        const productTitleElement = document.getElementById('modalProductTitle');
+        
+        if (titleElement) titleElement.textContent = 'Product Details';
+        if (productTitleElement) productTitleElement.textContent = product.product_name || 'Unnamed Product';
+        
+        // Handle main image and gallery
+        const modalImage = document.getElementById('modalImage');
+        const imageGallery = document.getElementById('imageGallery');
+        const images = product.product_image_urls || [];
+        
+        if (modalImage) {
+            modalImage.src = getImageUrl(images[0]);
+            modalImage.alt = product.product_name || 'Product image';
+        }
+        
+        if (imageGallery) {
+            if (images.length > 1) {
+                imageGallery.innerHTML = images.map((img, i) => 
+                    `<img src="${getImageUrl(img)}" class="gallery-thumbnail ${i === 0 ? 'active' : ''}" 
+                          onclick="changeMainImage('${img}', this)">`).join('');
+                imageGallery.style.display = 'flex';
+            } else {
+                imageGallery.style.display = 'none';
+            }
+        }
+
+        // Handle product descriptions - find description container more robustly
+        let descriptionContainer = document.getElementById('modalDescription') || 
+                                 document.getElementById('product-modal-description') ||
+                                 document.querySelector('.product-modal-description') ||
+                                 document.querySelector('.modal-description') ||
+                                 document.querySelector('#productModal .description');
+        
+        // If no description container found, create one
+        if (!descriptionContainer) {
+            const modalContent = document.querySelector('.product-modal-content');
+            if (modalContent) {
+                descriptionContainer = document.createElement('div');
+                descriptionContainer.id = 'modalDescription';
+                descriptionContainer.className = 'product-modal-description';
+                
+                // Insert after product title or at beginning
+                const productTitle = document.getElementById('modalProductTitle');
+                if (productTitle) {
+                    productTitle.parentNode.insertBefore(descriptionContainer, productTitle.nextSibling);
+                } else {
+                    modalContent.appendChild(descriptionContainer);
+                }
+            }
+        }
+        
+        if (descriptionContainer) {
+            let descContent = '';
+            
+            // Short description
+            if (product.short_description?.trim()) {
+                descContent += `<div class="short-description">
+                    <h4>Description</h4>
+                    <p>${product.short_description}</p>
+                </div>`;
+            }
+            
+            // Long description (if different from short)
+            if (product.long_description?.trim() && product.long_description !== product.short_description) {
+                descContent += `<div class="long-description">
+                    <h4>Detailed Description</h4>
+                    <div>${product.long_description}</div>
+                </div>`;
+            }
+            
+            // Basic product info
+            const basicInfo = [];
+            if (product.sku) basicInfo.push(`<span><strong>SKU:</strong> ${product.sku}</span>`);
+            if (product.manufacturer) basicInfo.push(`<span><strong>Manufacturer:</strong> ${product.manufacturer}</span>`);
+            if (product.category) basicInfo.push(`<span><strong>Category:</strong> ${product.category}</span>`);
+            
+            if (basicInfo.length > 0) {
+                descContent += `<div class="basic-product-info">
+                    <h4>Product Information</h4>
+                    <div class="info-grid">${basicInfo.join('')}</div>
+                </div>`;
+            }
+            
+            // Technical information table
+            if (product.technical_information?.trim()) {
+                const techInfo = product.technical_information.replace(/\\n/g, '\n');
+                
+                if (techInfo.includes('|')) {
+                    const lines = techInfo.split('\n').filter(line => line.trim());
+                    if (lines.length > 2) {
+                        let tableHTML = '<div class="technical-specifications"><h4>Technical Specifications</h4><table class="specs-table">';
+                        
+                        lines.forEach((line, index) => {
+                            if (index === 1 && line.includes('---')) return; // Skip separator
+                            
+                            const cells = line.split('|').map(cell => cell.trim()).filter(cell => cell);
+                            if (cells.length >= 2) {
+                                if (index === 0) {
+                                    tableHTML += '<thead><tr>';
+                                    cells.forEach(cell => tableHTML += `<th>${cell}</th>`);
+                                    tableHTML += '</tr></thead><tbody>';
+                                } else {
+                                    tableHTML += '<tr>';
+                                    cells.forEach(cell => {
+                                        // Handle markdown links [text](url)
+                                        const processedCell = cell.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+                                        tableHTML += `<td>${processedCell}</td>`;
+                                    });
+                                    tableHTML += '</tr>';
+                                }
+                            }
+                        });
+                        
+                        tableHTML += '</tbody></table></div>';
+                        descContent += tableHTML;
+                    }
+                } else {
+                    descContent += `<div class="technical-specifications">
+                        <h4>Technical Information</h4>
+                        <div class="tech-info-text">${techInfo}</div>
+                    </div>`;
+                }
+            }
+            
+            // Special notes
+            if (product.special_note?.trim()) {
+                descContent += `<div class="special-note">
+                    <h4>Important Notes</h4>
+                    <div class="note-content">
+                        <i class="fas fa-info-circle"></i> ${product.special_note}
+                    </div>
+                </div>`;
+            }
+            
+            // Dimensions if available
+            const dimensions = [];
+            if (product.length) dimensions.push(`Length: ${product.length}${product.dimension_unit || 'mm'}`);
+            if (product.width) dimensions.push(`Width: ${product.width}${product.dimension_unit || 'mm'}`);
+            if (product.height) dimensions.push(`Height: ${product.height}${product.dimension_unit || 'mm'}`);
+            
+            if (dimensions.length > 0) {
+                descContent += `<div class="product-dimensions">
+                    <h4>Dimensions</h4>
+                    <div class="dimensions-info">${dimensions.join(' × ')}</div>
+                </div>`;
+            }
+            
+            // If we have content, show it; otherwise show minimal placeholder
+            if (descContent.trim()) {
+                descriptionContainer.innerHTML = descContent;
+            } else {
+                descriptionContainer.innerHTML = `
+                    <div class="minimal-info">
+                        <h4>Product Details</h4>
+                        <p>${product.product_name || 'Product details not available'}</p>
+                    </div>
+                `;
+            }
+            descriptionContainer.style.display = 'block';
+        }
+
+        // Handle video links section
+        const videoContainer = document.getElementById('modalVideoContainer');
+        if (videoContainer) {
+            let videoContent = '';
+            
+            if (product.youtube_links?.length > 0) {
+                videoContent = `<div class="video-section">
+                    <h4>Product Videos</h4>
+                    ${product.youtube_links.map(url => createYouTubeEmbed(url, product.product_name)).join('')}
+                </div>`;
+            } else if (product.video_url?.trim()) {
+                videoContent = `<div class="video-section">
+                    <h4>Product Video</h4>
+                    ${createYouTubeEmbed(product.video_url, product.product_name)}
+                </div>`;
+            } else {
+                const searchUrl = createYouTubeSearchUrl(product.product_name);
+                videoContent = `<div class="video-section">
+                    <h4>Related Videos</h4>
+                    <a href="${searchUrl}" target="_blank" class="youtube-search-link">
+                        <i class="fab fa-youtube"></i> Search "${product.product_name}" on YouTube
+                    </a>
+                </div>`;
+            }
+            
+            videoContainer.innerHTML = videoContent;
+            videoContainer.style.display = 'block';
+        }
+
+        // Handle PDF downloads section
+        const pdfContainer = document.getElementById('modalPdfContainer');
+        if (pdfContainer) {
+            let pdfContent = '';
+            
+            if (product.download_pdfs?.length > 0) {
+                pdfContent = `<div class="pdf-section">
+                    <h4>Downloads</h4>
+                    ${product.download_pdfs.map((pdfUrl, index) => {
+                        const fullPdfUrl = getPdfUrl(pdfUrl);
+                        return `<a href="${fullPdfUrl}" target="_blank" class="pdf-download-link">
+                            <i class="fas fa-file-pdf"></i> Download Manual ${index > 0 ? (index + 1) : ''}
+                        </a>`;
+                    }).join('')}
+                </div>`;
+            } else if (product.pdf_url?.trim()) {
+                const pdfUrl = getPdfUrl(product.pdf_url);
+                pdfContent = `<div class="pdf-section">
+                    <h4>Downloads</h4>
+                    <a href="${pdfUrl}" target="_blank" class="pdf-download-link">
+                        <i class="fas fa-file-pdf"></i> View Product Manual
+                    </a>
+                </div>`;
+            }
+            
+            if (pdfContent) {
+                pdfContainer.innerHTML = pdfContent;
+                pdfContainer.style.display = 'block';
+            } else {
+                pdfContainer.style.display = 'none';
+            }
+        }
+
         // Handle variants
         const variantsSection = document.getElementById('variantsSection');
         const variantsList = document.getElementById('variantsList');
@@ -1005,6 +1272,75 @@
         
         .add-to-cart, .request-quote { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
         .product-card-content { cursor: pointer; }
+        
+        /* Modal Description Styles */
+        .short-description, .long-description, .basic-product-info, .technical-specifications, .special-note { 
+            margin-bottom: 20px; 
+        }
+        .short-description h4, .long-description h4, .basic-product-info h4, .technical-specifications h4, .special-note h4 { 
+            margin: 0 0 10px 0; color: #333; font-size: 16px; 
+        }
+        .info-grid { 
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; 
+        }
+        .info-grid span { 
+            padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 14px; 
+        }
+        .specs-table { 
+            width: 100%; border-collapse: collapse; margin-top: 10px; 
+        }
+        .specs-table th, .specs-table td { 
+            padding: 8px 12px; border: 1px solid #ddd; text-align: left; 
+        }
+        .specs-table th { 
+            background: #f8f9fa; font-weight: 600; 
+        }
+        .specs-table tr:nth-child(even) { 
+            background: #f9f9f9; 
+        }
+        .specs-table a { 
+            color: #007bff; text-decoration: none; 
+        }
+        .specs-table a:hover { 
+            text-decoration: underline; 
+        }
+        .special-note .note-content { 
+            padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px; 
+        }
+        .no-description { 
+            text-align: center; color: #666; padding: 20px; 
+        }
+        .video-section, .pdf-section { 
+            margin-bottom: 15px; 
+        }
+        .video-section h4, .pdf-section h4 { 
+            margin: 0 0 10px 0; color: #333; font-size: 16px; 
+        }
+        .youtube-video-container { 
+            position: relative; display: inline-block; margin: 10px 0; 
+        }
+        .youtube-thumbnail { 
+            width: 100%; max-width: 300px; border-radius: 8px; 
+        }
+        .youtube-play-overlay { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            background: rgba(0,0,0,0.8); border-radius: 50%; width: 50px; height: 50px; 
+            display: flex; align-items: center; justify-content: center; 
+        }
+        .youtube-play-icon { 
+            width: 0; height: 0; border-left: 15px solid white; 
+            border-top: 10px solid transparent; border-bottom: 10px solid transparent; margin-left: 3px; 
+        }
+        .youtube-video-title { 
+            margin-top: 5px; font-size: 14px; color: #333; 
+        }
+        .pdf-download-link, .youtube-search-link { 
+            display: inline-block; padding: 10px 15px; background: #dc3545; color: white; 
+            text-decoration: none; border-radius: 5px; margin: 5px 5px 5px 0; 
+        }
+        .pdf-download-link:hover, .youtube-search-link:hover { 
+            background: #c82333; color: white; 
+        }
     `;
     document.head.appendChild(style);
 
